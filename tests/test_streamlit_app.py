@@ -80,5 +80,12 @@ class AppTests(unittest.TestCase):
             self.assertTrue(at.text_input(key='slides_url'))
             self.assertFalse(at.session_state.sample_available)
 
+    def test_prior_project_placeholder_is_registered_and_renders(self):
+        at = self.app.switch_page('app_pages/1_Low-Res_Change_Detection.py').run()
+        self.assertFalse(at.exception)
+        self.assertEqual(at.header[0].value, 'Low-resolution satellite image change detection')
+        self.assertIn('docs.google.com/presentation/', at.get('iframe')[0].proto.src)
+        self.assertTrue(at.button(key='change_detection_build').disabled)
+
 
 if __name__=='__main__': unittest.main()

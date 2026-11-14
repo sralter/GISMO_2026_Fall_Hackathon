@@ -8,7 +8,10 @@ page = st.navigation([
             help='Present your slides beside a compact building demo.'),
     st.Page('app_pages/demo.py', title='Demo', icon=':material/map:', url_path='demo',
             help='Explore linked 2D footprints and 3D building surfaces; inspect and download measurements.'),
-], position='top')
+    st.Page('app_pages/1_Low-Res_Change_Detection.py', title='Low-res change detection',
+            icon=':material/satellite_alt:', url_path='low-res-change-detection',
+            help='Prior-project example: Google Slides alongside a demo placeholder.'),
+], position='sidebar')
 st.title('SPASE')
 st.caption('Solar Panel Assessment and Siting Engine · NYC building explorer')
 
