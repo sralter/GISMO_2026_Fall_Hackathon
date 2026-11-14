@@ -1,3 +1,7 @@
+# Ignore everything inside data/
+data/**
+# Except Markdown files
+!data/**/*.md
 archive/
 # Streamlit agent skills (environment-specific symlinks)
 .agents/skills/developing-with-streamlit
