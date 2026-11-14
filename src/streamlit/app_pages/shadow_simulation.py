@@ -1,8 +1,7 @@
-"""Presentation and independent Brooklyn shadow simulation."""
+"""Brooklyn shadow simulation and chatbot."""
 from datetime import date
 import hashlib
 import streamlit as st
-from explorer import render_slides
 from shadow_view import SOURCE, cached_scene, cached_steps, source_stamp, cached_solar, solar_stamp
 from gismo_2026_fall_hackathon.shadows import CAMERAS, STUDY_BOUNDS
 from spase_shadows import render_shadows
@@ -45,9 +44,6 @@ with st.sidebar:
         bounds = st.session_state.shadow_bounds
 
 left, right = st.columns([0.4, 0.6], gap='large')
-with left:
-    st.subheader('Presentation')
-    render_slides()
 with right:
     st.subheader('Building shadows')
     st.caption('Clear-sky sunlight on roofs, façades, and ground. Drag the time slider to move the sun.')

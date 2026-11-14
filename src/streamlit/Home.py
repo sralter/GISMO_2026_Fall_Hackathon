@@ -6,6 +6,8 @@ st.set_page_config(page_title='SPASE · NYC buildings', page_icon=':material/dom
 page = st.navigation([
     st.Page('app_pages/presentation.py', title='Presentation', icon=':material/slideshow:', default=True,
             help='Present your slides beside a compact building demo.'),
+    st.Page('app_pages/slides.py', title='Slides', icon=':material/slideshow:', url_path='slides',
+            help='View the presentation slides on their own.'),
     st.Page('app_pages/shadow_simulation.py', title='Building shadows', icon=':material/wb_sunny:',
             url_path='building-shadows', help='Explore live shadows across Brooklyn buildings.'),
     st.Page('app_pages/demo.py', title='Demo', icon=':material/map:', url_path='demo',
@@ -17,7 +19,7 @@ page = st.navigation([
 st.title('SPASE')
 st.caption('Solar Panel Assessment and Siting Engine · NYC building explorer')
 
-if page.url_path != 'building-shadows':
+if page.url_path not in ('building-shadows', 'slides'):
     files = sorted(DATA.glob('DA*_3D_Buildings_Merged.gml'), key=lambda p: int(p.name.split('_')[0][2:]))
     with st.sidebar:
         st.header('Explore buildings')
