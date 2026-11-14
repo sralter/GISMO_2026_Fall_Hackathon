@@ -1,0 +1,2 @@
+recursive-include spase_shadows/frontend/build *
+include pyproject.toml

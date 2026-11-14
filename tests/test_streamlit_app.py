@@ -54,6 +54,40 @@ class AppTests(unittest.TestCase):
         at.switch_page('app_pages/presentation.py').run()
         self.assertEqual(at.text_input(key='slides_url').value,'https://docs.google.com/presentation/d/example/edit')
 
+    def test_shadow_page_is_independent_and_solstice_controls_work(self):
+        import shadow_view
+        from test_shadows import sample as shadow_sample
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / 'footprints.parquet'
+            shadow_sample().to_parquet(source, write_covering_bbox=True)
+            with patch.object(shadow_view, 'SOURCE', source), patch.object(explorer, 'get_sample') as gml:
+                at = self.app.switch_page('app_pages/shadow_simulation.py').run()
+                self.assertFalse(at.exception)
+                gml.assert_not_called()
+                self.assertFalse(any(widget.key == 'source_file' for widget in at.selectbox))
+                self.assertEqual(at.toggle(key='shadow_live').value, True)
+                at.button(key='shadow_winter').click().run()
+                self.assertFalse(at.exception)
+                self.assertEqual(at.date_input(key='shadow_date').value.month, 12)
+                at.button(key='shadow_summer').click().run()
+                self.assertFalse(at.exception)
+                self.assertEqual(at.date_input(key='shadow_date').value.month, 6)
+                at.selectbox(key='shadow_area').set_value('NYC area').run()
+                self.assertFalse(at.exception)
+                at.number_input(key='shadow_west').set_value(0.0)
+                at.button(key='shadow_load').click().run()
+                self.assertFalse(at.exception)
+                self.assertTrue(at.error)
+                self.assertEqual(at.session_state.shadow_bounds, (-74.001, 40.685, -73.974, 40.702))
+
+    def test_missing_footprints_keep_slides_usable(self):
+        import shadow_view
+        with patch.object(shadow_view, 'SOURCE', ROOT / 'missing-footprints.parquet'):
+            at = self.app.switch_page('app_pages/shadow_simulation.py').run()
+            self.assertFalse(at.exception)
+            self.assertTrue(at.error)
+            self.assertTrue(at.text_input(key='slides_url'))
+
     def test_map_selection_uses_shared_building_key(self):
         for obj in [{'building_key':'selected'}, {'properties':{'building_key':'selected'}}]:
             state={'chart':{'selection':{'objects':{'layer':[obj]}}}}

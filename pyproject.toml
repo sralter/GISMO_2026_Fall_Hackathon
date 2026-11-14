@@ -14,12 +14,14 @@ dependencies = [
     "matplotlib>=3.11.2",
     "numpy>=2.5.4",
     "pandas>=3.1.1",
+    "pvlib>=0.16.1",
     "pydeck>=0.9.3",
     "pyproj>=3.8.0",
     "pyvista>=0.49.2",
     "s3fs>=2026.9.0",
     "scipy>=1.18.1",
     "shapely>=2.2.0",
+    "spase-shadows",
     "streamlit>=1.67.0",
     "streamlit-folium>=0.27.4",
     "vtk>=9.7.2",
@@ -37,3 +39,11 @@ build-backend = "uv_build"
 dev = [
     "ty>=0.0.104",
 ]
+
+[tool.uv.workspace]
+members = [
+    "components/spase-shadows",
+]
+
+[tool.uv.sources]
+spase-shadows = { workspace = true, editable = true }

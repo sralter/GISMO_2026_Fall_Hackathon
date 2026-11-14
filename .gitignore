@@ -228,3 +228,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Component frontend dependencies (built assets are committed)
+node_modules/
+
+# Ship locally bundled CCv2 assets so Python-only installs work
+!components/spase-shadows/spase_shadows/frontend/build/
+!components/spase-shadows/spase_shadows/frontend/build/**

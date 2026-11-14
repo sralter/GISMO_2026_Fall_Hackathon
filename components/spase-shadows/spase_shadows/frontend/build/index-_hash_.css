@@ -1,0 +1,2 @@
+.shadow-root{font-family:var(--st-font,sans-serif);color:var(--st-text-color,#27323b);width:100%}.shadow-canvas{background:#e9edf0;border-radius:8px;height:650px;position:relative;overflow:hidden}.shadow-controls{gap:8px;padding:12px 2px;display:grid}.shadow-controls label{font-weight:600}.shadow-controls output{font-variant-numeric:tabular-nums;display:block}.shadow-controls input{accent-color:#287776;cursor:ew-resize;width:100%}.shadow-status{min-height:1.5em;font-size:.875rem}
+/*$vite$:1*/
