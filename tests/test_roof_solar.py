@@ -59,6 +59,27 @@ class RoofSolarTests(unittest.TestCase):
         self.assertAlmostEqual(float(result[0, 0]), 500., places=3)
         self.assertEqual(lit[0, 0], 1.)
 
+    def test_farther_taller_obstacle_sets_horizon(self):
+        index = HorizonIndex(buildings([box(0,0,10,10), box(20,0,30,10), box(40,0,50,10)],
+                                       [10., 20., 80.]))
+        h = index.horizons(np.array([[5.,5.,10.02]]), 5.)
+        self.assertAlmostEqual(h[0, 18], np.degrees(np.arctan(69.98 / 35)), places=3)
+
+    def test_coincident_edge_query_terminates(self):
+        index = HorizonIndex(buildings([box(0,0,10,10)]))
+        class RepeatedEdge:
+            calls = 0
+            def IntersectWithLine(self, origin, end, tol, t, hit, pcoords, sub_id, cell_id, cell):
+                self.calls += 1
+                if self.calls > 24:
+                    raise AssertionError('repeated edge must not cause an infinite loop')
+                hit[:] = [10., 0., 0.]
+                cell_id.set(0)
+                return 1
+        index.locator = RepeatedEdge()
+        h = index.horizons(np.array([[0.,0.,0.]]), 30.)
+        np.testing.assert_allclose(h, 45., atol=.001)
+
     def test_courtyard_opening_and_tall_surrounding_walls(self):
         courtyard = Polygon([(-10,-10),(10,-10),(10,10),(-10,10)],
                             holes=[[(-5,-5),(5,-5),(5,5),(-5,5)]])

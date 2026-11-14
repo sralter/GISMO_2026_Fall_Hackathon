@@ -169,7 +169,12 @@ class HorizonIndex:
                         break
                     distance = math.hypot(hit[0] - origin[0], hit[1] - origin[1])
                     height = self.tops[int(cell_id)] - origin[2]
-                    slope = max(slope + 1e-7, height / max(distance, 1e-6) + 1e-7)
+                    next_slope = height / max(distance, 1e-6)
+                    # VTK can return the same edge within its intersection tolerance.
+                    # A ray already above that roof must not loop on a coincident face.
+                    if next_slope <= slope + 1e-8:
+                        break
+                    slope = next_slope + 1e-6 * max(1., next_slope)
                 result[i, j] = math.degrees(math.atan(slope))
         return result
 
@@ -273,9 +278,15 @@ def _prepare(source: Path = SOURCE, config: SolarConfig = SolarConfig(), *, annu
             temporary = root / f'{name}.tmp.parquet'
             frame.to_parquet(temporary)
             temporary.replace(root / f'{name}.parquet')
+        geometry_hash = hashlib.sha256()
+        for geometry, height in zip(casters.geometry.to_wkb(), casters.roof_z):
+            geometry_hash.update(geometry)
+            geometry_hash.update(np.float64(height).tobytes())
         metadata = {**asdict(config), 'model_version': MODEL_VERSION, 'receiver_bounds': receiver_bounds,
                     'caster_bounds': caster_bounds, 'casters': len(casters),
                     'excluded_casters': excluded_casters,
+                    'geometry_fingerprint': geometry_hash.hexdigest(),
+                    'solar_azimuth': 'true north corrected to EPSG:32618 grid north',
                     'method': 'area-weighted roof samples; azimuth skyline interpolation; isotropic sky visibility',
                     'annual_units': 'kWh/m²/year', 'instant_units': 'W/m²', 'weather': 'Ineichen clear sky'}
         temporary = root / 'metadata.tmp.json'

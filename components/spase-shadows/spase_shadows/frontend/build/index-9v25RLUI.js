@@ -27081,7 +27081,7 @@ var JC = ({ parentElement: e, data: t, setStateValue: n }) => {
 	}
 	if (r.solarId !== t.solar_id && t.solar) {
 		let n = r, i = t.solar_id ?? "";
-		n.solarId = i;
+		n.solarId = i, n.solar = null, n.solarIndex.clear();
 		let a = Uint8Array.from(atob(t.solar), (e) => e.charCodeAt(0)), o = new Blob([a]).stream().pipeThrough(new DecompressionStream("gzip"));
 		new Response(o).text().then((t) => {
 			HC.get(e) === n && n.solarId === i && (n.solar = JSON.parse(t), n.solarIndex = new Map(n.solar.ids.map((e, t) => [e, t])), n.colorKey = "", WC(n), n.emit("loaded_solar_id", i));

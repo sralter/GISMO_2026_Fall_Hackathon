@@ -20,7 +20,10 @@ def render_shadows(*, scene_payload: str, scene_id: str, steps: list[dict], slot
                    shadows: bool, live: bool, camera: dict | None, camera_command: int,
                    key: str = 'shadow_map', highlighted_building_ids: list[str] | None = None,
                    solar_payload: str = '', solar_id: str = '', color_mode: str = 'reference'):
-    """Mount a scene; synchronize time to Python only after a slider release."""
+    """Mount the map; acknowledge geometry and solar arrays separately to avoid resends.
+
+    Time synchronizes to Python only after a slider release.
+    """
     loaded = st.session_state.get(key, {}).get('loaded_scene_id') == scene_id
     solar_loaded = st.session_state.get(key, {}).get('loaded_solar_id') == solar_id
     return _renderer(key=key, data=dict(scene='' if loaded else scene_payload, scene_id=scene_id, steps=steps, slot=slot,

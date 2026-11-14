@@ -70,6 +70,8 @@ with right:
     modes = {'Annual clear-sky': 'annual', 'Selected time': 'instant', "Colleague’s June 21 data": 'reference'}
     st.session_state.setdefault('shadow_color_mode', 'Annual clear-sky' if solar['annual'] else "Colleague’s June 21 data")
     mode = modes[st.segmented_control('Roof color', list(modes), key='shadow_color_mode', required=True) or 'Annual clear-sky']
+    if mode != 'reference' and tuple(bounds) != STUDY_BOUNDS:
+        st.info('Calculated results currently cover the default Brooklyn scene. Roofs outside that calculation are gray.')
     if mode == 'annual' and not solar['annual']:
         st.info('Annual results have not been prepared. Run the local preparation command; it resumes completed shading chunks.')
         st.code('uv run python -m gismo_2026_fall_hackathon.roof_solar --workers 4', language='bash')
