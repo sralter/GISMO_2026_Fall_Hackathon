@@ -40,3 +40,12 @@ Ground-derived footprints preserve missing-geometry flags rather than substituti
 and VTP into a new directory without overwriting existing outputs. The notebook
 tests export/reload in a temporary directory and includes an optional durable-export
 example. No solar model or Streamlit app changes are part of Stage 4.
+
+## Stage 5: presentation and demo
+
+Run `uv run streamlit run src/streamlit/Home.py` from the repository root.
+The presentation page pairs your slide deck with a compact live demo; the demo
+page exposes a full 2D/3D explorer and downloads. Both use the Stage 1–4 pipeline
+and share a building selection. Surface colors describe type or inclination;
+solar suitability and shadow simulation remain future work. See the
+[root README](../README.md) for controls, prerequisites, and checks.

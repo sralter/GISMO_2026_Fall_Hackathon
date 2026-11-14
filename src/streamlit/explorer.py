@@ -35,7 +35,7 @@ def map_selection(chart_key: str) -> None:
         for obj in objects:
             key = obj.get('building_key') or obj.get('properties', {}).get('building_key')
             if key:
-                st.session_state.selected_building = key
+                st.session_state['selected_building'] = key
                 return
 
 

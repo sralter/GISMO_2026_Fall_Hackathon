@@ -47,10 +47,10 @@ if sample is not None:
         labels[ALL] = 'All sampled buildings'
         if st.session_state.get('selected_building') not in options:
             st.session_state.selected_building = options[1] if len(options) > 1 else ALL
-        st.selectbox('Building', options, key='selected_building', format_func=lambda k: labels[k])
-        st.segmented_control('View', ['2D map', '3D buildings'], default='3D buildings', key='view_mode')
-        st.segmented_control('Color by', ['Surface type', 'Inclination'], default='Surface type', key='color_by')
-        st.toggle('Show basemap', value=True, key='show_basemap')
+        st.selectbox('Building', options, key='selected_building', persist_state='session', format_func=lambda k: labels[k])
+        st.segmented_control('View', ['2D map', '3D buildings'], default='3D buildings', key='view_mode', required=True, persist_state='session')
+        st.segmented_control('Color by', ['Surface type', 'Inclination'], default='Surface type', key='color_by', required=True, persist_state='session')
+        st.toggle('Show basemap', value=True, key='show_basemap', persist_state='session')
         st.caption('Geometry measurements are provisional. Solar exposure and shadowing have not been modeled.')
 # Pages get the cached sample independently; this flag also handles missing data.
 st.session_state.sample_available = sample is not None
