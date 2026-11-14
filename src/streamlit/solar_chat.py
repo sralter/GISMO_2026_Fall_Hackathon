@@ -1,8 +1,10 @@
 """Native chat UI for the shadow scene, with session-local conversation state."""
 import os
+import math
 import streamlit as st
 from openai import OpenAI, OpenAIError
 from gismo_2026_fall_hackathon.solar_assistant import answer_question
+from gismo_2026_fall_hackathon.solar_queries import execute_tool
 
 
 def setting(name: str, default: str = '') -> str:
@@ -34,6 +36,20 @@ def focus_camera(spec: dict, building_id: str) -> dict:
             'latitude': (min(p[1] for p in points) + max(p[1] for p in points)) / 2, 'zoom': 17}
 
 
+def results_camera(spec: dict, building_ids: list[str]) -> dict | None:
+    ids = set(building_ids)
+    roofs = next(layer['data'] for layer in spec['layers'] if layer['id'] == 'roofs')
+    points = [p for roof in roofs if roof['building_id'] in ids for p in roof['polygon'][0]]
+    if not points:
+        return None
+    west, east = min(p[0] for p in points), max(p[0] for p in points)
+    south, north = min(p[1] for p in points), max(p[1] for p in points)
+    latitude = (south + north) / 2
+    span = max(east - west, (north - south) / math.cos(math.radians(latitude)), 0.0001)
+    return {**spec['initialViewState'], 'longitude': (west + east) / 2, 'latitude': latitude,
+            'zoom': min(17, math.log2(360 / span) - 2)}
+
+
 @st.fragment
 def render_chat(spec: dict):
     state = st.session_state.solar_chat
@@ -52,12 +68,28 @@ def render_chat(spec: dict):
                 st.markdown(message['content'])
                 for result in message.get('results', []):
                     show_result(result)
-        if state['records']:
-            selected = st.selectbox('Result building', highlight_ids(), key='solar_focus_id')
-            if st.button('Focus on map', key='solar_focus'):
+    latest = next((m['results'][-1] for m in reversed(state['messages']) if m.get('results')), None)
+    if latest and latest['total_matches']:
+        if st.button('Show results on map', key='solar_show_results', type='primary'):
+            result = execute_tool(latest['tool'], latest['arguments'], spec['buildingInfo'], include_count_records=True)
+            state['records'] = result['records']
+            camera = results_camera(spec, highlight_ids())
+            if camera is not None:
+                st.session_state.shadow_camera = camera
+                st.session_state.shadow_camera_command += 1
+            st.rerun()
+    if state['records']:
+        st.caption(f"{len(state['records']):,} result buildings selected; visible roofs are outlined in cyan. "
+                   'Matches in the surrounding buffer may be outside the rendered map.')
+        selected = st.selectbox('Result building', highlight_ids(), key='solar_focus_id')
+        if st.button('Focus on map', key='solar_focus'):
+            camera = results_camera(spec, [selected])
+            if camera is not None:
                 st.session_state.shadow_camera = focus_camera(spec, selected)
                 st.session_state.shadow_camera_command += 1
                 st.rerun()
+            else:
+                st.info('This building is in the surrounding buffer, outside the rendered map.')
     prompt = st.chat_input('Ask about roof area or solar exposure…', key='solar_prompt',
                            disabled=not model, submit_mode='disable', max_chars=4000)
     if not state['messages']:

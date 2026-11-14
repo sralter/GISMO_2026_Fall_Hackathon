@@ -80,6 +80,30 @@ class AppTests(unittest.TestCase):
                 self.assertTrue(at.error)
                 self.assertEqual(at.session_state.shadow_bounds, (-74.001, 40.685, -73.974, 40.702))
 
+    def test_count_chat_results_can_be_shown_on_map(self):
+        import shadow_view
+        import solar_chat
+        from test_shadows import sample as shadow_sample
+        from gismo_2026_fall_hackathon.solar_queries import execute_tool
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / 'footprints.parquet'
+            shadow_sample().to_parquet(source, write_covering_bbox=True)
+            with patch.object(shadow_view, 'SOURCE', source), patch.object(solar_chat, 'setting', return_value='local'), patch.object(solar_chat, 'get_client'):
+                at = self.app.switch_page('app_pages/shadow_simulation.py').run()
+                scene = shadow_view.cached_scene(str(source), (-74.001, 40.685, -73.974, 40.702), shadow_view.source_stamp())
+                result = execute_tool('count_buildings', {'roof_area_above_m2': 0}, scene.spec['buildingInfo'])
+                with patch.object(solar_chat, 'answer_question', return_value=('Matching buildings.', [], [result])) as answer:
+                    at.chat_input(key='solar_prompt').set_value('Count roofs').run()
+                    self.assertFalse(at.exception)
+                    self.assertEqual(at.session_state.solar_chat['records'], [])
+                    before = at.session_state.shadow_camera_command
+                    at.button(key='solar_show_results').click().run()
+                    self.assertFalse(at.exception)
+                    self.assertEqual(len(at.session_state.solar_chat['records']), result['total_matches'])
+                    self.assertEqual(at.session_state.shadow_camera_command, before + 1)
+                    self.assertEqual(answer.call_count, 1)
+                    self.assertIsNone(solar_chat.results_camera(scene.spec, ['missing']))
+
     def test_solar_chat_results_focus_reset_and_failures(self):
         import shadow_view
         import solar_chat

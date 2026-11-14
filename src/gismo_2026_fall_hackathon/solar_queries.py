@@ -31,7 +31,7 @@ TOOLS = [
 ]
 
 
-def execute_tool(name: str, arguments: dict, inventory: dict) -> dict:
+def execute_tool(name: str, arguments: dict, inventory: dict, *, include_count_records: bool = False) -> dict:
     """Validate model arguments independently of the advertised JSON schema."""
     definition = next((tool['function'] for tool in TOOLS if tool['function']['name'] == name), None)
     if definition is None:
@@ -64,7 +64,7 @@ def execute_tool(name: str, arguments: dict, inventory: dict) -> dict:
             matches = sorted((row for row in matches if row[metric] is not None),
                              key=lambda row: (-row[metric], row['building_id']))
     total = len(matches)
-    records = [] if name == 'count_buildings' else matches[:arguments.get('limit', 1)]
+    records = (matches if include_count_records else []) if name == 'count_buildings' else matches[:arguments.get('limit', 1)]
     return {'tool': name, 'arguments': arguments, 'total_matches': total, 'records': records,
             'scene_buildings': len(rows), 'measured_roofs': coverage,
             'scope': 'Loaded scene, including the 1 km caster buffer.', 'metrics': METRICS}
