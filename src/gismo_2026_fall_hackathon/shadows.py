@@ -13,7 +13,8 @@ import pandas as pd
 import pyarrow.dataset as ds
 import pydeck as pdk
 from pvlib.solarposition import get_solarposition
-from shapely import make_valid
+from pyproj import Transformer
+from shapely import make_valid, transform
 from shapely.geometry import MultiPolygon, Polygon, box
 from shapely.geometry.polygon import orient
 
@@ -24,7 +25,8 @@ NYC_BOUNDS = (-74.26, 40.49, -73.69, 40.92)
 TIMEZONE = 'America/New_York'
 METRIC_CRS = 'EPSG:32618'
 FEET_TO_METERS = 0.3048
-ROOF_COLOR = [225, 185, 118]
+ROOF_COLOR = [160, 160, 160]  # No measured exposure.
+EXPOSURE_COLORS = [[255, 255, 0], [255, 128, 0], [255, 0, 0]]
 WALL_COLOR = [113, 143, 165]
 CAMERAS = {
     'Overview': {'longitude': -73.9875, 'latitude': 40.6935, 'zoom': 14.3, 'pitch': 55, 'bearing': -20},
@@ -81,15 +83,29 @@ def _polygons(geometry):
             yield from _polygons(part)
 
 
-def prepare_scene(frame: gpd.GeoDataFrame, bounds=STUDY_BOUNDS, load_bounds=None) -> ShadowScene:
+def exposure_color(value: float | None, exposure_range: tuple[float, float] | None) -> list[int]:
+    if value is None or not math.isfinite(value) or exposure_range is None:
+        return list(ROOF_COLOR)
+    low, high = exposure_range
+    fraction = float(np.clip((value - low) / (high - low), 0, 1)) if high > low else 0.5
+    segment = min(int(fraction * 2), 1)
+    weight = fraction * 2 - segment
+    return [round(a + (b - a) * weight) for a, b in zip(EXPOSURE_COLORS[segment], EXPOSURE_COLORS[segment + 1])]
+
+
+def prepare_scene(frame: gpd.GeoDataFrame, bounds=STUDY_BOUNDS, load_bounds=None,
+                  exposure_range: tuple[float, float] | None = None) -> ShadowScene:
     """Separate roofs and wall quads, with no duplicate extrusion caps."""
     # shortcut: flat roofs and level ground; use detailed meshes for engineering analysis.
     frame = frame.to_crs('OGC:CRS84')
+    if 'roof_exposure' not in frame:
+        frame['roof_exposure'] = np.nan
+    project = Transformer.from_crs('OGC:CRS84', METRIC_CRS, always_xy=True).transform
     roofs, walls = [], []
     building_info = {}
     excluded = repaired = buildings = 0
-    columns = ['height_roo', 'geometry', 'feature_co', 'doitt_id', 'bin', 'base_bbl']
-    for source_height, geometry, feature_code, building_id, bin_value, bbl in frame[columns].itertuples(index=False, name=None):
+    columns = ['height_roo', 'geometry', 'feature_co', 'doitt_id', 'bin', 'base_bbl', 'roof_exposure']
+    for source_height, geometry, feature_code, building_id, bin_value, bbl, exposure in frame[columns].itertuples(index=False, name=None):
         height = float(source_height) * FEET_TO_METERS if pd.notna(source_height) else float('nan')
         if not math.isfinite(height) or height <= 0 or geometry is None or geometry.is_empty or feature_code == 1003:
             excluded += 1
@@ -101,8 +117,11 @@ def prepare_scene(frame: gpd.GeoDataFrame, bounds=STUDY_BOUNDS, load_bounds=None
         if not polygons:
             excluded += 1
             continue
+        exposure = float(exposure) if pd.notna(exposure) and math.isfinite(exposure) else None
         properties = {'building_id': str(int(building_id)), 'bin': str(int(bin_value)) if pd.notna(bin_value) else '',
-                      'bbl': str(bbl), 'height_m': round(height, 2)}
+                      'bbl': str(bbl), 'height_m': round(height, 2),
+                      'roof_area_m2': round(sum(transform(p, project, interleaved=False).area for p in polygons), 2),
+                      'roof_exposure': exposure}
         buildings += 1
         building_info[properties['building_id']] = properties
         identity = {'building_id': properties['building_id']}
@@ -110,7 +129,7 @@ def prepare_scene(frame: gpd.GeoDataFrame, bounds=STUDY_BOUNDS, load_bounds=None
             # Normalize ring winding so courtyard walls face the courtyard.
             polygon = orient(polygon, sign=1.0)
             rings = [polygon.exterior, *polygon.interiors]
-            roofs.append({**identity, 'polygon': [
+            roofs.append({**identity, 'color': exposure_color(exposure, exposure_range), 'polygon': [
                 [[round(float(x), 7), round(float(y), 7), round(height, 3)] for x, y, *_ in ring.coords] for ring in rings]})
             for ring in rings:
                 coords = [(round(c[0], 7), round(c[1], 7)) for c in ring.coords]
@@ -132,7 +151,7 @@ def prepare_scene(frame: gpd.GeoDataFrame, bounds=STUDY_BOUNDS, load_bounds=None
     wall_layer = pdk.Layer('SolidPolygonLayer', id='walls', data=walls, get_polygon='polygon',
                            get_fill_color=WALL_COLOR, _full3d=True, **common)
     roof_layer = pdk.Layer('SolidPolygonLayer', id='roofs', data=roofs, get_polygon='polygon',
-                           get_fill_color=ROOF_COLOR, **common)
+                           get_fill_color='color', **common)
     boundary = pdk.Layer('PathLayer', id='study-boundary', data=[{'path': list(box(*bounds).exterior.coords)}],
                          get_path='path', get_color=[42, 112, 110], get_width=2, width_units='pixels', shadow_enabled=False)
     camera = dict(CAMERAS['Overview'])
@@ -144,11 +163,14 @@ def prepare_scene(frame: gpd.GeoDataFrame, bounds=STUDY_BOUNDS, load_bounds=None
                     initial_view_state=pdk.ViewState(**camera))
     spec = json.loads(deck.to_json())
     spec['buildingInfo'] = building_info
+    spec['roofExposure'] = {'range': exposure_range,
+                            'measured': sum(info['roof_exposure'] is not None for info in building_info.values())}
     payload = base64.b64encode(gzip.compress(json.dumps(spec, separators=(',', ':')).encode(), compresslevel=3)).decode()
     return ShadowScene(spec, payload, buildings, excluded, repaired, extent)
 
 
-def load_scene(path: str | Path, bounds=STUDY_BOUNDS, buffer_m=BUFFER_M, max_buildings=MAX_BUILDINGS) -> ShadowScene:
+def load_scene(path: str | Path, bounds=STUDY_BOUNDS, buffer_m=BUFFER_M, max_buildings=MAX_BUILDINGS,
+               radiation_path: str | Path | None = None) -> ShadowScene:
     extent = buffered_bounds(bounds, buffer_m)
     west, south, east, north = extent
     dataset = ds.dataset(str(path), format='parquet')
@@ -161,4 +183,13 @@ def load_scene(path: str | Path, bounds=STUDY_BOUNDS, buffer_m=BUFFER_M, max_bui
         raise ValueError(f'This area plus its buffer contains {count:,} buildings; the limit is {max_buildings:,}. Choose a smaller area.')
     columns = ['geometry', 'height_roo', 'doitt_id', 'bin', 'base_bbl', 'feature_co', 'ground_ele']
     frame = gpd.read_parquet(path, columns=columns, bbox=extent)
-    return prepare_scene(frame, bounds, extent)
+    exposure_range = None
+    if radiation_path is not None and Path(radiation_path).exists():
+        radiation = pd.read_parquet(radiation_path, columns=['doitt_id', 'MEAN_1'])
+        radiation = radiation.rename(columns={'MEAN_1': 'roof_exposure'})
+        radiation['roof_exposure'] = radiation.roof_exposure.where(np.isfinite(radiation.roof_exposure))
+        values = radiation.roof_exposure.dropna()
+        if not values.empty:
+            exposure_range = (float(values.min()), float(values.max()))
+        frame = frame.merge(radiation, on='doitt_id', how='left', validate='many_to_one')
+    return prepare_scene(frame, bounds, extent, exposure_range)

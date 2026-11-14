@@ -3,7 +3,7 @@ from datetime import date
 import hashlib
 import streamlit as st
 from explorer import render_slides
-from shadow_view import SOURCE, cached_scene, cached_steps
+from shadow_view import SOURCE, cached_scene, cached_steps, source_stamp
 from gismo_2026_fall_hackathon.shadows import CAMERAS, STUDY_BOUNDS
 from spase_shadows import render_shadows
 
@@ -35,8 +35,8 @@ with st.sidebar:
             if st.form_submit_button('Load area', key='shadow_load'):
                 # Keep the previous scene when a requested area is invalid or too large.
                 try:
-                    stat = SOURCE.stat()
-                    cached_scene(str(SOURCE), (west, south, east, north), (stat.st_mtime_ns, stat.st_size))
+                    stamp = source_stamp()
+                    cached_scene(str(SOURCE), (west, south, east, north), stamp)
                     st.session_state.shadow_bounds = (west, south, east, north)
                 except (OSError, ValueError) as exc:
                     st.error(str(exc))
@@ -50,9 +50,9 @@ with right:
     st.subheader('Building shadows')
     st.caption('Clear-sky sunlight on roofs, façades, and ground. Drag the time slider to move the sun.')
     try:
-        stat = SOURCE.stat()
+        stamp = source_stamp()
         with st.spinner('Preparing buildings and shadow surfaces…'):
-            scene = cached_scene(str(SOURCE), tuple(bounds), (stat.st_mtime_ns, stat.st_size))
+            scene = cached_scene(str(SOURCE), tuple(bounds), stamp)
     except FileNotFoundError:
         st.error('Add 09_NYC_Building_Footprints.parquet under data/buildings to load this map.')
         st.stop()
@@ -70,7 +70,7 @@ with right:
     if st.session_state.get('shadow_last_date') != day:
         st.session_state.shadow_last_date = day
         st.session_state['shadow_map'] = {**st.session_state.get('shadow_map', {}), 'slot': noon}
-    identity = repr((str(SOURCE), bounds, stat.st_mtime_ns, stat.st_size))
+    identity = repr((str(SOURCE), bounds, stamp))
     scene_id = hashlib.sha256(identity.encode()).hexdigest()
 
     @st.fragment
@@ -82,5 +82,18 @@ with right:
 
     interactive_map()
     st.caption(f'{scene.buildings:,} buildings including the 1 km caster buffer · {scene.excluded:,} excluded · {scene.repaired:,} repaired')
-    st.caption('Gold: roofs · blue-gray: façades · teal outline: study area. Drag to pan; Shift + drag rotates; scroll to zoom.')
+    exposure = scene.spec['roofExposure']
+    if exposure['range'] is not None:
+        low, high = exposure['range']
+        st.html(f'''<div role="img" aria-label="June 21 roof exposure: yellow is low, orange is moderate, red is high; gray means no data">
+          <div>June 21 roof exposure · units unspecified</div>
+          <div style="height:12px;background:linear-gradient(to right,#ffff00,#ff8000,#ff0000)"></div>
+          <div style="display:flex;justify-content:space-between"><span>{low:,.2f} · Low</span><span>High · {high:,.2f}</span></div>
+          <div><span style="display:inline-block;width:12px;height:12px;background:#a0a0a0"></span> Gray: no exposure data</div>
+        </div>''')
+    else:
+        st.info('Roof exposure data is unavailable. Roofs are gray until measurements are available.')
+    st.caption(f"{exposure['measured']:,} of {scene.buildings:,} buildings have roof exposure data in this buffered scene. "
+               'Exposure is the fixed June 21 dataset; date and time controls change illumination and shadows.')
+    st.caption('Blue-gray: façades · teal outline: study area. Drag to pan; Shift + drag rotates; scroll to zoom.')
     st.caption('Flat roofs and level ground are approximations. Shadows from beyond the buffer may be missing near sunrise or sunset. No clouds or reflected-light model.')

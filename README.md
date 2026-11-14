@@ -52,8 +52,23 @@ receives the time on release. Turn **Live shadows** off for release-only updates
 The date and time use `America/New_York`; repeated daylight-saving hours include
 their timezone and UTC offset.
 
-Roofs are gold and façades blue-gray, rendered separately for later solar-potential
-colors. Shadows fall on ground, roofs, and façades. This is a clear-sky geometric
+Roofs use a continuous yellow–orange–red ramp for June 21 exposure; gray roofs have
+no measurement. Façades remain blue-gray. Exposure comes from `MEAN_1` in
+`18_NYC_Solar_Candidates_With_Radiation.parquet`, joined to footprints by `doitt_id`.
+Its 246 populated values match `MEAN` in `07_Brooklyn_Rooftop_Solar_Table.parquet`
+via the candidate IDs in layer 16; layer 17 contains identical exposure values.
+The measurements cover 145 Manhattan and 101 Brooklyn roofs, including 147 in the
+default buffered scene. The ramp uses the complete measurement range across all
+map extents. The reference PDF supports the palette direction, but does not
+document units or numeric class boundaries; values are shown with units unspecified.
+Exposure stays fixed when the simulation date or time changes. If the radiation
+file is absent, all roofs remain gray and the page explains the missing data.
+
+Roof popups show total flat-roof area in m², computed from the repaired footprint
+in the metric scene CRS, subtracting courtyard holes and summing multipart roofs.
+This is geometric roof area, not usable solar-panel area. Façade area is deferred.
+
+Shadows fall on ground, roofs, and façades. This is a clear-sky geometric
 visualization, with no clouds, reflected-light calculation, or energy estimates.
 Ambient illumination only keeps geometry visible. Roofs are flat, ground is level,
 and source heights are converted from feet to meters. Trees and roof setbacks

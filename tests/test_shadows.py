@@ -3,12 +3,16 @@ from pathlib import Path
 import tempfile
 import math
 import unittest
+import base64
+import gzip
+import json
 
 import geopandas as gpd
+import pandas as pd
 from shapely.geometry import Polygon, MultiPolygon, box
 
 from gismo_2026_fall_hackathon.shadows import (
-    STUDY_BOUNDS, buffered_bounds, daylight_steps, load_scene, prepare_scene,
+    STUDY_BOUNDS, METRIC_CRS, ROOF_COLOR, buffered_bounds, daylight_steps, exposure_color, load_scene, prepare_scene,
 )
 
 
@@ -22,6 +26,58 @@ def sample():
 
 
 class ShadowTests(unittest.TestCase):
+    def test_exposure_ramp_and_payload(self):
+        self.assertEqual(exposure_color(10, (10, 30)), [255, 255, 0])
+        self.assertEqual(exposure_color(20, (10, 30)), [255, 128, 0])
+        self.assertEqual(exposure_color(30, (10, 30)), [255, 0, 0])
+        for missing in [None, float('nan'), float('inf')]:
+            self.assertEqual(exposure_color(missing, (10, 30)), ROOF_COLOR)
+        frame = sample()
+        frame['roof_exposure'] = [20., None, None]
+        scene = prepare_scene(frame, exposure_range=(10, 30))
+        decoded = json.loads(gzip.decompress(base64.b64decode(scene.payload)))
+        self.assertEqual(decoded['buildingInfo'], scene.spec['buildingInfo'])
+        self.assertEqual(decoded['roofExposure'], {'range': [10, 30], 'measured': 1})
+        roof = next(layer for layer in decoded['layers'] if layer['id'] == 'roofs')
+        self.assertTrue(all(r['color'] == [255, 128, 0] for r in roof['data']))
+
+    def test_roof_area_subtracts_holes_and_sums_parts(self):
+        frame = sample().to_crs(METRIC_CRS)
+        courtyard = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)],
+                            holes=[[(5, 5), (15, 5), (15, 15), (5, 15)]])
+        # Place known metric geometry within NYC before projecting it for rendering.
+        from shapely.affinity import translate
+        origin = frame.geometry.iloc[0].centroid
+        frame.loc[0, 'geometry'] = translate(MultiPolygon([courtyard, box(30, 0, 40, 10)]), origin.x, origin.y)
+        scene = prepare_scene(frame)
+        self.assertAlmostEqual(scene.spec['buildingInfo']['1']['roof_area_m2'], 400., places=2)
+
+    def test_radiation_join_preserves_buildings_and_uses_global_range(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path, radiation = Path(folder) / 'buildings.parquet', Path(folder) / 'radiation.parquet'
+            frame = sample()
+            frame['height_roo'] = 100.
+            frame.to_parquet(path, write_covering_bbox=True)
+            pd.DataFrame({'doitt_id': [99, 2, 1], 'MEAN_1': [30., float('inf'), 10.]}).to_parquet(radiation)
+            scene = load_scene(path, radiation_path=radiation)
+            self.assertEqual(scene.buildings, 3)
+            self.assertEqual(scene.spec['roofExposure'], {'range': (10., 30.), 'measured': 1})
+            self.assertEqual(scene.spec['buildingInfo']['1']['roof_exposure'], 10.)
+            self.assertIsNone(scene.spec['buildingInfo']['2']['roof_exposure'])
+            self.assertIsNone(scene.spec['buildingInfo']['3']['roof_exposure'])
+            missing = load_scene(path, radiation_path=Path(folder) / 'missing.parquet')
+            self.assertEqual(missing.buildings, 3)
+            self.assertIsNone(missing.spec['roofExposure']['range'])
+            baseline = prepare_scene(frame)
+            for layer_id in ['walls', 'roofs']:
+                actual = next(l for l in scene.spec['layers'] if l['id'] == layer_id)
+                original = next(l for l in baseline.spec['layers'] if l['id'] == layer_id)
+                self.assertEqual(len(actual['data']), len(original['data']))
+            smaller = load_scene(path, bounds=(-73.9901, 40.6899, -73.989, 40.6911), buffer_m=0,
+                                 radiation_path=radiation)
+            roof_colors = lambda s: {r['building_id']: r['color'] for l in s.spec['layers'] if l['id'] == 'roofs' for r in l['data']}
+            self.assertEqual(roof_colors(scene)['1'], roof_colors(smaller)['1'])
+
     def test_distinct_roofs_walls_preserve_holes_and_convert_feet(self):
         scene = prepare_scene(sample())
         self.assertEqual(scene.buildings, 1)

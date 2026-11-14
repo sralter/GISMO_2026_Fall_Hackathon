@@ -9,7 +9,7 @@ type Data = {scene: string; scene_id: string; steps: Step[]; slot: number;
   shadows: boolean; live: boolean; camera: MapViewState | null; camera_command: number};
 type State = {slot: number; loaded_scene_id: string};
 type Emit = FrontendRendererArgs<State, Data>['setStateValue'];
-type BuildingInfo = Record<string, {height_m: number; bin: string}>;
+type BuildingInfo = Record<string, {height_m: number; bin: string; roof_area_m2: number; roof_exposure: number | null}>;
 type Instance = {info: BuildingInfo; deck: Deck<MapView>; effect: LightingEffect; root: HTMLElement; slider: HTMLInputElement; label: HTMLOutputElement;
   status: HTMLElement; sceneId: string; cameraCommand: number; frame: number; cleanup: ReturnType<typeof setTimeout> | null;
   data: Data; emit: Emit; draws: number; renderMs: number; lastStart: number};
@@ -57,7 +57,12 @@ const render: FrontendRenderer<State, Data> = ({parentElement, data, setStateVal
         effects: [next.effect], width: '100%', height: '100%', useDevicePixels: Math.min(window.devicePixelRatio, 2),
         getTooltip: ({object, layer}) => {
           const info = next.info[object?.building_id];
-          return info ? {text: `Building ${object.building_id}\n${layer?.id === 'roofs' ? 'Roof' : 'Façade'} · ${info.height_m} m\nBIN ${info.bin}`} : null;
+          if (!info) return null;
+          // Façade area will be implemented separately when wall measurements are available.
+          const surface = layer?.id === 'roofs'
+            ? `Roof area · ${info.roof_area_m2.toLocaleString(undefined, {maximumFractionDigits: 2})} m²\n${info.roof_exposure === null ? 'No exposure data' : `June 21 exposure · ${info.roof_exposure.toFixed(2)} (units unspecified)`}`
+            : 'Façade';
+          return {text: `Building ${object.building_id}\n${surface}\nBIN ${info.bin}`};
         },
         onBeforeRender: () => {next.lastStart = performance.now();},
         onAfterRender: () => {next.draws++; next.renderMs = performance.now() - next.lastStart;

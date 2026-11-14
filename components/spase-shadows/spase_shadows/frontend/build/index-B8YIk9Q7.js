@@ -26954,7 +26954,9 @@ var UC = ({ parentElement: e, data: t, setStateValue: n }) => {
 				useDevicePixels: Math.min(window.devicePixelRatio, 2),
 				getTooltip: ({ object: e, layer: t }) => {
 					let n = l.info[e?.building_id];
-					return n ? { text: `Building ${e.building_id}\n${t?.id === "roofs" ? "Roof" : "Façade"} · ${n.height_m} m\nBIN ${n.bin}` } : null;
+					if (!n) return null;
+					let r = t?.id === "roofs" ? `Roof area · ${n.roof_area_m2.toLocaleString(void 0, { maximumFractionDigits: 2 })} m²\n${n.roof_exposure === null ? "No exposure data" : `June 21 exposure · ${n.roof_exposure.toFixed(2)} (units unspecified)`}` : "Façade";
+					return { text: `Building ${e.building_id}\n${r}\nBIN ${n.bin}` };
 				},
 				onBeforeRender: () => {
 					l.lastStart = performance.now();
