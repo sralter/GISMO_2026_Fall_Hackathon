@@ -13,6 +13,7 @@ Open the URL printed by Streamlit. The app includes these pages:
 - **Presentation:** a Google Slides URL field beside a compact live building demo.
   Paste a published deck URL or a sharing link whose viewing permissions allow embedding.
 - **Building shadows:** slides beside a live 3D sunlight/shadow simulation covering Downtown Brooklyn and Brooklyn Heights.
+- **Height impact:** raise one building and estimate changes in nearby rooftop solar and bill savings.
 - **Demo:** a full building explorer with 2D/3D switching, surface measurements,
   orientation flags, and CSV/GeoJSON downloads.
 
@@ -156,6 +157,21 @@ Deck.gl shadow mapping is experimental and requires WebGL2. The proof scene has 
 100 m block south of a 20 m block; at winter noon its shadow reaches the shorter
 roof and south façade. The bundled renderer retains one GPU context across time
 and camera changes and frees it when the page unmounts.
+
+## Building height impact
+
+Open **Height impact** in the app, or run it independently:
+
+```sh
+uv run streamlit run src/streamlit/app_pages/height_impact.py
+```
+
+This page reads `18_NYC_Solar_Candidates_With_Radiation.parquet` and, optionally,
+`26_dob_solar_approved_permits_11142026.parquet` from `data/buildings/`.
+It joins permit sites by BIN and reads source data without modifying it.
+It models only solar-candidate footprints, so surrounding buildings absent from
+that dataset do not cast shadows. Energy and savings are scenario estimates
+using the assumptions shown in the sidebar, rather than validated production.
 
 ## Local roof chatbot
 

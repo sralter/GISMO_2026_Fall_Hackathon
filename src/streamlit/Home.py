@@ -10,6 +10,8 @@ page = st.navigation([
             help='View the presentation slides on their own.'),
     st.Page('app_pages/shadow_simulation.py', title='Building shadows', icon=':material/wb_sunny:',
             url_path='building-shadows', help='Explore live shadows across Brooklyn buildings.'),
+    st.Page('app_pages/height_impact.py', title='Height impact', icon=':material/apartment:',
+            url_path='height-impact', help='Estimate how raising a building changes nearby rooftop solar and savings.'),
     st.Page('app_pages/demo.py', title='Demo', icon=':material/map:', url_path='demo',
             help='Explore linked 2D footprints and 3D building surfaces; inspect and download measurements.'),
     st.Page('app_pages/1_Low-Res_Change_Detection.py', title='Low-res change detection',
@@ -19,7 +21,7 @@ page = st.navigation([
 st.title('SPASE')
 st.caption('Solar Panel Assessment and Siting Engine · NYC building explorer')
 
-if page.url_path not in ('building-shadows', 'slides'):
+if page.url_path not in ('building-shadows', 'slides', 'height-impact'):
     files = sorted(DATA.glob('DA*_3D_Buildings_Merged.gml'), key=lambda p: int(p.name.split('_')[0][2:]))
     with st.sidebar:
         st.header('Explore buildings')

@@ -24,7 +24,7 @@ from shapely.geometry import Polygon
 
 from .shadows import FEET_TO_METERS, METRIC_CRS, TIMEZONE, _polygons
 
-DATA_DIR = Path(__file__).resolve().parents[2] / 'data'
+DATA_DIR = Path(__file__).resolve().parents[2] / 'data' / 'buildings'
 FOOTPRINTS_PATH = DATA_DIR / '18_NYC_Solar_Candidates_With_Radiation.parquet'
 PERMITS_PATH = DATA_DIR / '26_dob_solar_approved_permits_11142026.parquet'
 FLOOR_HEIGHT_FT = 10  # Typical NYC storey; used only when the measured roof height is missing.
@@ -142,9 +142,9 @@ def shadow_polygon(footprint, relative_height_m: float, azimuth_deg: float, elev
 def _shaded_fraction(target, parts: list) -> float:
     if not parts:
         return 0.0
-    parts = np.asarray(parts, dtype=object)
-    parts = parts[shapely.intersects(parts, target)]
-    return shapely.union_all(parts).intersection(target).area / target.area if len(parts) else 0.0
+    intersecting = np.asarray(parts, dtype=object)
+    intersecting = intersecting[shapely.intersects(intersecting, target)]
+    return shapely.union_all(intersecting).intersection(target).area / target.area if len(intersecting) else 0.0
 
 
 def shading_losses(frame: gpd.GeoDataFrame, target_id: str, scenarios: list[pd.Series],

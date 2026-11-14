@@ -63,7 +63,7 @@ def scenario(path: str, stamp: tuple, raised_id: str, added_ft: float, assumptio
 
 stamp = stamp_of(SOURCE)
 if stamp is None:
-    st.error(f'Add {SOURCE.name} under data/ to run height scenarios.')
+    st.error(f'Add {SOURCE.name} under data/buildings/ to run height scenarios.')
     st.stop()
 with st.spinner('Loading building footprints and permits…'):
     frame = footprints(str(SOURCE), stamp)
