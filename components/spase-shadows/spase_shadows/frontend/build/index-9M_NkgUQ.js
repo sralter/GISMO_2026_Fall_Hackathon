@@ -26871,13 +26871,44 @@ function zC(e, t, n) {
 	}
 	return e;
 }
+// src/solar.ts
+function BC(e, t) {
+	if (e === null || !Number.isFinite(e)) return [
+		160,
+		160,
+		160
+	];
+	let n = Math.max(0, Math.min(e / t, 1));
+	return n <= .5 ? [
+		255,
+		Math.round(255 - n * 254),
+		0
+	] : [
+		255,
+		Math.round(256 * (1 - n)),
+		0
+	];
+}
+function VC(e, t, n, r) {
+	if (!e || t === void 0) return {
+		annual: null,
+		instant: null,
+		sunlit: null
+	};
+	let i = e.valid[t] && e.timestamps[n] === r;
+	return {
+		annual: e.annual[t] ?? null,
+		instant: i ? e.irradiance[n]?.[t] ?? null : null,
+		sunlit: i ? e.sunlit[n]?.[t] ?? null : null
+	};
+}
 // src/index.ts
-var BC = /* @__PURE__ */ new WeakMap(), VC = new MC({ configuration: { classes: {
+var HC = /* @__PURE__ */ new WeakMap(), UC = new MC({ configuration: { classes: {
 	SolidPolygonLayer: iC,
 	PathLayer: kS,
 	MapView: dg
 } } });
-function HC(e) {
+function WC(e) {
 	let t = e.data.steps[Number(e.slider.value)];
 	if (!t) return;
 	let n = t.elevation > 0, r = { ambient: new Qp({
@@ -26906,11 +26937,52 @@ function HC(e) {
 		0,
 		0,
 		n && e.data.shadows ? .55 : 0
-	], e.label.textContent = t.label, e.status.textContent = `Sun elevation ${t.elevation.toFixed(1)}° · ${n ? "Clear sky · direct sunlight" : "Night · cast shadows off"}`, e.slider.setAttribute("aria-valuetext", t.label), e.root.dataset.timestamp = String(t.timestamp), e.root.dataset.elevation = String(t.elevation), e.deck.redraw("sun changed");
+	], e.label.textContent = t.label, e.status.textContent = `Sun elevation ${t.elevation.toFixed(1)}° · ${n ? "Clear sky · direct sunlight" : "Night · cast shadows off"}`, e.slider.setAttribute("aria-valuetext", t.label), e.root.dataset.timestamp = String(t.timestamp), e.root.dataset.elevation = String(t.elevation), KC(e), e.deck.redraw("sun changed");
 }
-var UC = ({ parentElement: e, data: t, setStateValue: n }) => {
-	let r = BC.get(e);
-	if (r?.cleanup && clearTimeout(r.cleanup), r && !r.root.isConnected && (r.deck.finalize(), BC.delete(e), r = void 0), !r) {
+function GC(e, t) {
+	let n = Number(e.slider.value);
+	return VC(e.solarId === e.data.solar_id ? e.solar : null, e.solarIndex.get(t), n, e.data.steps[n]?.timestamp);
+}
+function KC(e) {
+	if (!e.layers.length) return;
+	let t = e.data.color_mode ?? "reference", n = `${t}:${e.solarId}:${e.data.solar_id}:${t === "instant" ? e.slider.value : ""}`;
+	e.colorKey !== n && (e.colorKey = n, e.layers = e.layers.map((r) => r.id === "roofs" ? r.clone({
+		getFillColor: (n) => t === "reference" ? n.color : BC(t === "annual" ? GC(e, n.building_id).annual : GC(e, n.building_id).instant, t === "annual" ? 2200 : 1200),
+		updateTriggers: { getFillColor: n }
+	}) : r), e.highlightKey = "", qC(e));
+}
+function qC(e) {
+	if (!e.layers.length) return;
+	let t = e.data.highlighted_building_ids ?? [], n = JSON.stringify(t);
+	if (n === e.highlightKey) return;
+	e.highlightKey = n;
+	let r = new Set(t), i = new kS({
+		id: "chat-results",
+		data: e.roofs.filter((e) => r.has(e.building_id)).flatMap((e) => e.polygon.map((t) => ({
+			building_id: e.building_id,
+			path: t.map((e) => [
+				e[0],
+				e[1],
+				e[2] + .3
+			])
+		}))),
+		getPath: (e) => e.path,
+		getColor: [
+			0,
+			235,
+			255
+		],
+		getWidth: 4,
+		widthUnits: "pixels",
+		pickable: !0,
+		shadowEnabled: !1,
+		parameters: { depthCompare: "always" }
+	});
+	e.deck.setProps({ layers: [...e.layers, i] }), e.root.dataset.highlightedIds = JSON.stringify(t);
+}
+var JC = ({ parentElement: e, data: t, setStateValue: n }) => {
+	let r = HC.get(e);
+	if (r?.cleanup && clearTimeout(r.cleanup), r && !r.root.isConnected && (r.deck.finalize(), HC.delete(e), r = void 0), !r) {
 		let i = e.querySelector(".shadow-root"), a = i.querySelector(".shadow-canvas"), o = i.querySelector("input"), s = i.querySelector("output"), c = i.querySelector(".shadow-status"), l = {
 			root: i,
 			slider: o,
@@ -26928,6 +27000,13 @@ var UC = ({ parentElement: e, data: t, setStateValue: n }) => {
 				],
 				_shadow: !0
 			}) }),
+			solar: null,
+			solarId: "",
+			solarIndex: /* @__PURE__ */ new Map(),
+			colorKey: "",
+			layers: [],
+			roofs: [],
+			highlightKey: "",
 			info: {},
 			data: t,
 			emit: n,
@@ -26955,8 +27034,12 @@ var UC = ({ parentElement: e, data: t, setStateValue: n }) => {
 				getTooltip: ({ object: e, layer: t }) => {
 					let n = l.info[e?.building_id];
 					if (!n) return null;
-					let r = t?.id === "roofs" ? `Roof area · ${n.roof_area_m2.toLocaleString(void 0, { maximumFractionDigits: 2 })} m²\n${n.roof_exposure === null ? "No exposure data" : `June 21 exposure · ${n.roof_exposure.toFixed(2)} (units unspecified)`}` : "Façade";
-					return { text: `Building ${e.building_id}\n${r}\nBIN ${n.bin}` };
+					let r = GC(l, e.building_id), i = n.roof_exposure === null ? "No exposure data" : `June 21 exposure · ${n.roof_exposure.toFixed(2)} (units unspecified)`, a = [
+						r.annual === null ? "Annual resource unavailable" : `Annual clear-sky · ${r.annual.toFixed(1)} kWh/m²/year`,
+						r.instant === null ? "Selected-time result unavailable" : `Clear-sky irradiance · ${r.instant.toFixed(1)} W/m²`,
+						r.sunlit === null ? "" : `Sunlit roof · ${(r.sunlit * 100).toFixed(1)}%`
+					].filter(Boolean).join("\n"), o = t?.id === "roofs" || t?.id === "chat-results" ? `Roof area · ${n.roof_area_m2.toLocaleString(void 0, { maximumFractionDigits: 2 })} m²\n${(l.data.color_mode ?? "reference") === "reference" ? i : a}` : "Façade";
+					return { text: `Building ${e.building_id}\n${o}\nBIN ${n.bin}` };
 				},
 				onBeforeRender: () => {
 					l.lastStart = performance.now();
@@ -26974,37 +27057,44 @@ var UC = ({ parentElement: e, data: t, setStateValue: n }) => {
 		}
 		o.oninput = () => {
 			s.textContent = l.data.steps[Number(o.value)].label, l.data.live && !l.frame && (l.frame = requestAnimationFrame(() => {
-				l.frame = 0, HC(l);
+				l.frame = 0, WC(l);
 			}));
 		}, o.onchange = () => {
-			l.frame &&= (cancelAnimationFrame(l.frame), 0), HC(l), l.emit("slot", Number(o.value));
+			l.frame &&= (cancelAnimationFrame(l.frame), 0), WC(l), l.emit("slot", Number(o.value));
 		}, a.addEventListener("webglcontextlost", () => {
 			c.textContent = "The graphics context was lost. Reload the page or load a smaller area.";
-		}, !0), BC.set(e, l), r = l, t.scene || n("loaded_scene_id", "");
+		}, !0), HC.set(e, l), r = l, t.scene || n("loaded_scene_id", ""), t.solar || n("loaded_solar_id", "");
 	}
 	if (r.data = t, r.emit = n, r.slider.max = String(t.steps.length - 1), r.slider.value = String(Math.min(t.slot, t.steps.length - 1)), r.root.dataset.live = String(t.live), r.root.dataset.shadows = String(t.shadows), r.sceneId !== t.scene_id && t.scene) {
 		let n = r;
 		n.sceneId = t.scene_id;
 		let i = Uint8Array.from(atob(t.scene), (e) => e.charCodeAt(0)), a = new Blob([i]).stream().pipeThrough(new DecompressionStream("gzip"));
 		new Response(a).text().then((r) => {
-			if (BC.get(e) !== n || n.sceneId !== t.scene_id) return;
+			if (HC.get(e) !== n || n.sceneId !== t.scene_id) return;
 			let i = JSON.parse(r);
 			n.info = i.buildingInfo;
-			let a = VC.convert(i);
-			n.deck.setProps({
-				layers: a.layers,
-				initialViewState: n.data.camera ?? a.initialViewState
-			}), n.root.dataset.sceneId = t.scene_id, HC(n), n.emit("loaded_scene_id", t.scene_id);
+			let a = UC.convert(i);
+			n.layers = a.layers, n.roofs = i.layers.find((e) => e.id === "roofs").data, n.highlightKey = "", n.colorKey = "", qC(n), n.deck.setProps({ initialViewState: n.data.camera ?? a.initialViewState }), n.root.dataset.sceneId = t.scene_id, WC(n), n.emit("loaded_scene_id", t.scene_id);
 		}).catch((e) => {
 			n.status.textContent = `Could not load the 3D scene: ${String(e)}`;
 		});
 	}
-	t.camera && r.cameraCommand !== t.camera_command && (r.deck.setProps({ initialViewState: t.camera }), r.cameraCommand = t.camera_command, r.root.dataset.cameraCommand = String(t.camera_command)), HC(r);
+	if (r.solarId !== t.solar_id && t.solar) {
+		let n = r, i = t.solar_id ?? "";
+		n.solarId = i;
+		let a = Uint8Array.from(atob(t.solar), (e) => e.charCodeAt(0)), o = new Blob([a]).stream().pipeThrough(new DecompressionStream("gzip"));
+		new Response(o).text().then((t) => {
+			HC.get(e) === n && n.solarId === i && (n.solar = JSON.parse(t), n.solarIndex = new Map(n.solar.ids.map((e, t) => [e, t])), n.colorKey = "", WC(n), n.emit("loaded_solar_id", i));
+		}).catch((e) => {
+			n.status.textContent = `Could not load roof solar data: ${String(e)}`, n.solarId = "";
+		});
+	}
+	t.camera && r.cameraCommand !== t.camera_command && (r.deck.setProps({ initialViewState: t.camera }), r.cameraCommand = t.camera_command, r.root.dataset.cameraCommand = String(t.camera_command)), qC(r), WC(r);
 	let i = r;
 	return () => {
 		i.cleanup = setTimeout(() => {
-			i.frame && cancelAnimationFrame(i.frame), i.deck.finalize(), BC.delete(e);
+			i.frame && cancelAnimationFrame(i.frame), i.deck.finalize(), HC.delete(e);
 		}, 0);
 	};
 };
-export { UC as default };
+export { JC as default };

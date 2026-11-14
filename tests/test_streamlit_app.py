@@ -80,6 +80,50 @@ class AppTests(unittest.TestCase):
                 self.assertTrue(at.error)
                 self.assertEqual(at.session_state.shadow_bounds, (-74.001, 40.685, -73.974, 40.702))
 
+    def test_solar_chat_results_focus_reset_and_failures(self):
+        import shadow_view
+        import solar_chat
+        from test_shadows import sample as shadow_sample
+        from gismo_2026_fall_hackathon.solar_queries import execute_tool
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / 'footprints.parquet'
+            shadow_sample().to_parquet(source, write_covering_bbox=True)
+            with patch.object(shadow_view, 'SOURCE', source), patch.object(solar_chat, 'setting', return_value='local'), patch.object(solar_chat, 'get_client'):
+                at = self.app.switch_page('app_pages/shadow_simulation.py').run()
+                self.assertFalse(at.exception)
+                scene = shadow_view.cached_scene(str(source), (-74.001, 40.685, -73.974, 40.702), shadow_view.source_stamp())
+                result = execute_tool('get_top_buildings', {'metric': 'roof_area_m2', 'limit': 2}, scene.spec['buildingInfo'])
+                with patch.object(solar_chat, 'answer_question', return_value=('Here are the roofs.', [], [result])) as answer:
+                    at.chat_input(key='solar_prompt').set_value('Top roofs').run()
+                    self.assertFalse(at.exception)
+                    self.assertEqual(answer.call_count, 1)
+                    self.assertEqual(len(at.dataframe), 1)
+                    self.assertEqual(solar_chat.focus_camera(scene.spec, result['records'][0]['building_id'])['zoom'], 17)
+                    at.button(key='solar_focus').click().run()
+                    self.assertFalse(at.exception)
+                    self.assertEqual(at.session_state.shadow_camera['zoom'], 17)
+                    at.button(key='shadow_winter').click().run()
+                    self.assertEqual(len(at.session_state.solar_chat['messages']), 2)
+                    at.button(key='solar_reset').click().run()
+                    self.assertFalse(at.exception)
+                    self.assertEqual(at.session_state.solar_chat['messages'], [])
+                with patch.object(solar_chat, 'answer_question', side_effect=ValueError('model offline')):
+                    at.chat_input(key='solar_prompt').set_value('Count roofs').run()
+                    self.assertFalse(at.exception)
+                    self.assertTrue(at.error)
+                    self.assertEqual(at.session_state.solar_chat['conversation'], [])
+                with patch.object(solar_chat, 'setting', return_value=''):
+                    at.run()
+                    self.assertTrue(at.chat_input(key='solar_prompt').disabled)
+                old_scene_id = at.session_state.solar_chat['scene_id']
+                at.session_state.solar_chat['records'] = result['records']
+                at.session_state.solar_chat['messages'] = [{'role': 'assistant', 'content': 'Old area'}]
+                source.touch()
+                at.run()
+                self.assertNotEqual(at.session_state.solar_chat['scene_id'], old_scene_id)
+                self.assertEqual(at.session_state.solar_chat['records'], [])
+                self.assertEqual(at.session_state.solar_chat['messages'], [])
+
     def test_missing_footprints_keep_slides_usable(self):
         import shadow_view
         with patch.object(shadow_view, 'SOURCE', ROOT / 'missing-footprints.parquet'):
