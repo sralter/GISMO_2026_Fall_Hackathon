@@ -5,7 +5,7 @@ Run: python -m gismo_2026_fall_hackathon.roof_solar --help
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 import hashlib
@@ -260,7 +260,7 @@ def _prepare(source: Path = SOURCE, config: SolarConfig = SolarConfig(), *, annu
     receiver_bounds = buffered_bounds(config.bounds)
     caster_bounds = buffered_bounds(receiver_bounds, config.caster_buffer_m)
     columns = ['doitt_id', 'height_roo', 'ground_ele', 'feature_co', 'geometry']
-    if not (root / 'receivers.parquet').exists():
+    if not all((root / name).exists() for name in ['receivers.parquet', 'casters.parquet', 'metadata.json']):
         receivers = clean_buildings(gpd.read_parquet(source, columns=columns, bbox=receiver_bounds))
         casters = clean_buildings(gpd.read_parquet(source, columns=columns, bbox=caster_bounds))
         excluded_casters = int((casters.status != 'ok').sum())
@@ -269,14 +269,18 @@ def _prepare(source: Path = SOURCE, config: SolarConfig = SolarConfig(), *, annu
             raise ValueError('No usable shading geometry.')
         # Only the receivers rendered by the simulator need results.
         receivers = receivers[receivers.status != 'unusable height or feature'].reset_index(drop=True)
-        casters.to_parquet(root / 'casters.parquet')
-        receivers.to_parquet(root / 'receivers.parquet')
+        for name, frame in [('casters', casters), ('receivers', receivers)]:
+            temporary = root / f'{name}.tmp.parquet'
+            frame.to_parquet(temporary)
+            temporary.replace(root / f'{name}.parquet')
         metadata = {**asdict(config), 'model_version': MODEL_VERSION, 'receiver_bounds': receiver_bounds,
                     'caster_bounds': caster_bounds, 'casters': len(casters),
                     'excluded_casters': excluded_casters,
                     'method': 'area-weighted roof samples; azimuth skyline interpolation; isotropic sky visibility',
                     'annual_units': 'kWh/m²/year', 'instant_units': 'W/m²', 'weather': 'Ineichen clear sky'}
-        (root / 'metadata.json').write_text(json.dumps(metadata, indent=2))
+        temporary = root / 'metadata.tmp.json'
+        temporary.write_text(json.dumps(metadata, indent=2))
+        temporary.replace(root / 'metadata.json')
     receivers = gpd.read_parquet(root / 'receivers.parquet')
     if receivers.empty:
         raise ValueError('No roof receivers in this area.')
@@ -293,7 +297,9 @@ def _prepare(source: Path = SOURCE, config: SolarConfig = SolarConfig(), *, annu
         else:
             with ProcessPoolExecutor(max_workers=workers, initializer=_init_index,
                                      initargs=(str(root / 'casters.parquet'),)) as pool:
-                for done, _ in enumerate(pool.map(_prepare_chunk, pending), 1):
+                futures = [pool.submit(_prepare_chunk, task) for task in pending]
+                for done, future in enumerate(as_completed(futures), 1):
+                    future.result()
                     progress(f'Shading chunks {chunks - len(pending) + done}/{chunks}')
     operations: list[tuple[Path, pd.DatetimeIndex, float | None]] = []
     if annual and not (root / 'annual.parquet').exists():

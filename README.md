@@ -118,8 +118,8 @@ Roof popups show total flat-roof area in m², computed from the repaired footpri
 in the metric scene CRS, subtracting courtyard holes and summing multipart roofs.
 This is geometric roof area, not usable solar-panel area. Façade area is deferred.
 
-Shadows fall on ground, roofs, and façades. This is a clear-sky geometric
-visualization, with no clouds, reflected-light calculation, or energy estimates.
+Visual shadows fall on ground, roofs, and façades. The shadow renderer is separate
+from the solar resource calculation described above; its pixels do not measure energy.
 Ambient illumination only keeps geometry visible. Roofs are flat, ground is level,
 and source heights are converted from feet to meters. Trees and roof setbacks
 are not modeled. Shadows beyond the loaded caster buffer may be incomplete at
