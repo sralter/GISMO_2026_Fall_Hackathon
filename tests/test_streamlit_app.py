@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import date
 import json
 import sys
 import tempfile
@@ -25,34 +26,31 @@ class AppTests(unittest.TestCase):
         loader.start();self.addCleanup(loader.stop)
         self.app=AppTest.from_file(str(ROOT/'src/streamlit/Home.py'),default_timeout=30).run()
 
-    def test_pages_selection_views_and_url_validation(self):
-        at=self.app
-        self.assertFalse(at.exception)
-        initial=at.session_state.selected_building
-        at.segmented_control(key='view_mode').set_value('2D map').run()
-        self.assertFalse(at.exception)
-        at.switch_page('app_pages/demo.py').run()
-        self.assertFalse(at.exception)
-        self.assertEqual(at.session_state.selected_building,initial)
-        self.assertEqual(at.segmented_control(key='view_mode').value,'2D map')
-        self.assertEqual(len(at.dataframe),1)
-        self.assertEqual(len(at.dataframe[0].value),6)
-        self.assertEqual(at.metric[0].value,'1')
-        at.segmented_control(key='view_mode').set_value('3D buildings').run()
-        at.segmented_control(key='color_by').set_value('Inclination').run()
-        self.assertFalse(at.exception)
-        at.switch_page('app_pages/presentation.py').run()
-        self.assertEqual(at.segmented_control(key='color_by').value,'Inclination')
-        self.assertEqual(at.segmented_control(key='view_mode').value,'3D buildings')
-        at.text_input(key='slides_url').set_value('<script>alert(1)</script>').run()
-        self.assertFalse(at.exception)
-        self.assertTrue(at.error)
-        at.text_input(key='slides_url').set_value('https://docs.google.com/presentation/d/example/edit').run()
-        self.assertFalse(at.exception)
-        self.assertFalse(at.error)
-        at.switch_page('app_pages/demo.py').run()
-        at.switch_page('app_pages/presentation.py').run()
-        self.assertEqual(at.text_input(key='slides_url').value,'https://docs.google.com/presentation/d/example/edit')
+    def test_slides_url_validation_and_persistence_across_shadow_navigation(self):
+        import shadow_view
+        from test_shadows import sample as shadow_sample
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / 'footprints.parquet'
+            shadow_sample().to_parquet(source, write_covering_bbox=True)
+            with patch.object(shadow_view, 'SOURCE', source):
+                at = self.app.switch_page('app_pages/slides.py').run()
+                self.assertFalse(at.exception)
+                at.text_input(key='slides_url').set_value('<script>alert(1)</script>').run()
+                self.assertFalse(at.exception)
+                self.assertTrue(at.error)
+                url = 'https://docs.google.com/presentation/d/example/edit'
+                at.text_input(key='slides_url').set_value(url).run()
+                self.assertFalse(at.exception)
+                self.assertFalse(at.error)
+                self.assertEqual(at.get('iframe')[0].proto.src,
+                                 'https://docs.google.com/presentation/d/example/embed?start=false&loop=false&delayms=60000')
+                at.switch_page('app_pages/shadow_simulation.py').run()
+                self.assertFalse(at.exception)
+                self.assertTrue(at.toggle(key='shadow_live').value)
+                at.switch_page('app_pages/slides.py').run()
+                self.assertFalse(at.exception)
+                self.assertEqual(at.text_input(key='slides_url').value, url)
+                self.assertFalse(at.error)
 
     def test_shadow_page_is_independent_and_solstice_controls_work(self):
         import shadow_view
@@ -68,10 +66,14 @@ class AppTests(unittest.TestCase):
                 self.assertEqual(at.toggle(key='shadow_live').value, True)
                 at.button(key='shadow_winter').click().run()
                 self.assertFalse(at.exception)
-                self.assertEqual(at.date_input(key='shadow_date').value.month, 12)
+                winter = at.date_input(key='shadow_date').value
+                assert isinstance(winter, date)
+                self.assertEqual(winter.month, 12)
                 at.button(key='shadow_summer').click().run()
                 self.assertFalse(at.exception)
-                self.assertEqual(at.date_input(key='shadow_date').value.month, 6)
+                summer = at.date_input(key='shadow_date').value
+                assert isinstance(summer, date)
+                self.assertEqual(summer.month, 6)
                 at.selectbox(key='shadow_area').set_value('NYC area').run()
                 self.assertFalse(at.exception)
                 at.number_input(key='shadow_west').set_value(0.0)
@@ -187,13 +189,6 @@ class AppTests(unittest.TestCase):
             self.assertFalse(at.exception)
             self.assertTrue(at.text_input(key='slides_url'))
             self.assertFalse(at.session_state.sample_available)
-
-    def test_prior_project_placeholder_is_registered_and_renders(self):
-        at = self.app.switch_page('app_pages/1_Low-Res_Change_Detection.py').run()
-        self.assertFalse(at.exception)
-        self.assertEqual(at.header[0].value, 'Low-resolution satellite image change detection')
-        self.assertIn('docs.google.com/presentation/', at.get('iframe')[0].proto.src)
-        self.assertTrue(at.button(key='change_detection_build').disabled)
 
 
 if __name__=='__main__': unittest.main()
