@@ -119,7 +119,7 @@ def render_explorer(sample: DisplaySample, *, compact: bool) -> None:
 
 
 def render_slides() -> None:
-    url = st.text_input('Google Slides URL', key='slides_url', persist_state='session',
+    url = st.text_input('Google Slides URL: https://docs.google.com/presentation/d/e/2PACX-1vRK79ihK-5XRK4UA445zqLxVEc4ZS9nxEpYzPjY9MPoYiJ3njm63yL9QHlq-OL1ojJWME9QVk54BoQb/pub?start=false&loop=false&delayms=3000', key='slides_url', persist_state='session',
                         placeholder='Paste a sharing link or published presentation URL')
     if url:
         embed = slide_embed_url(url)
