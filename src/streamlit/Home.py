@@ -4,19 +4,19 @@ from explorer import DATA, ALL, get_sample
 
 st.set_page_config(page_title='SPASE · NYC buildings', page_icon=':material/domain:', layout='wide')
 page = st.navigation([
-    st.Page('app_pages/presentation.py', title='Presentation', icon=':material/slideshow:', default=True,
-            help='Present your slides beside a compact building demo.'),
+    # st.Page('app_pages/presentation.py', title='Presentation', icon=':material/slideshow:', default=True,
+    #         help='Present your slides beside a compact building demo.'),
     st.Page('app_pages/slides.py', title='Slides', icon=':material/slideshow:', url_path='slides',
             help='View the presentation slides on their own.'),
     st.Page('app_pages/shadow_simulation.py', title='Building shadows', icon=':material/wb_sunny:',
             url_path='building-shadows', help='Explore live shadows across Brooklyn buildings.'),
     st.Page('app_pages/height_impact.py', title='Height impact', icon=':material/apartment:',
             url_path='height-impact', help='Estimate how raising a building changes nearby rooftop solar and savings.'),
-    st.Page('app_pages/demo.py', title='Demo', icon=':material/map:', url_path='demo',
-            help='Explore linked 2D footprints and 3D building surfaces; inspect and download measurements.'),
-    st.Page('app_pages/1_Low-Res_Change_Detection.py', title='Low-res change detection',
-            icon=':material/satellite_alt:', url_path='low-res-change-detection',
-            help='Prior-project example: Google Slides alongside a demo placeholder.'),
+    # st.Page('app_pages/demo.py', title='Demo', icon=':material/map:', url_path='demo',
+    #         help='Explore linked 2D footprints and 3D building surfaces; inspect and download measurements.'),
+    # st.Page('app_pages/1_Low-Res_Change_Detection.py', title='Low-res change detection',
+    #         icon=':material/satellite_alt:', url_path='low-res-change-detection',
+    #         help='Prior-project example: Google Slides alongside a demo placeholder.'),
 ], position='sidebar')
 st.title('SPASE')
 st.caption('Solar Panel Assessment and Siting Engine · NYC building explorer')

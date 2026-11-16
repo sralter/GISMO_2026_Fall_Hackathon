@@ -41,8 +41,13 @@ def solar_stamp(day: date) -> tuple:
 
 
 @st.cache_data(max_entries=4, show_spinner=False)
+def cached_solar_results(path: str, day: date, stamp: tuple) -> dict:
+    return load_results(Path(path), SolarConfig(), day)
+
+
+@st.cache_data(max_entries=4, show_spinner=False)
 def cached_solar(path: str, day: date, stamp: tuple) -> dict:
-    results = load_results(Path(path), SolarConfig(), day)
+    results = cached_solar_results(path, day, stamp)
     annual, daily = results['annual'], results['day']
     ids = daily['ids'] if daily is not None else annual.doitt_id.to_numpy() if annual is not None else np.array([], dtype=int)
     annual_lookup = {} if annual is None else dict(zip(annual.doitt_id, annual.annual_kwh_m2))

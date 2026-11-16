@@ -175,7 +175,7 @@ using the assumptions shown in the sidebar, rather than validated production.
 
 ## Local roof chatbot
 
-On **Building shadows**, chat below the slides queries the loaded building scene,
+On **Building shadows**, chat queries the loaded building scene,
 including its 1 km caster buffer. Ask for counts above a roof-area threshold, top
 roofs by area or exposure, or details by building ID. Returned buildings have cyan
 roof outlines; choose a result and click **Focus on map** to inspect it. A new
@@ -204,9 +204,35 @@ change conversation history. Requests time out after 120 seconds, with at most f
 model requests per question and no automatic retries. The map remains usable when
 no model is configured or the server is unavailable.
 
-“Solar potential” ranks the fixed June 21 measured roof exposure, excluding missing
-values. Its units are unspecified; it is not energy production or engineering
-suitability. Counts use geometric flat-roof area in m², not usable panel area.
+“Solar potential” now defaults to annual calculated clear-sky resource in
+kWh/m²/year. Selected-time roof-average irradiance is in W/m² and uses the map's
+selected date/time after the slider is released. The June 21 reference exposure
+remains a separate queryable metric with unspecified units. Missing values are
+excluded, not treated as zero. Counts use geometric flat-roof area in m², not
+usable panel area. These metrics describe incoming sunlight, not electricity output.
+
+Combine thresholds in one question, or refine the previous query:
+
+- “How many buildings have roof areas above 1500 square meters?”
+- “Of these, how many have clear-sky irradiance above 494 W/m²?”
+- “How many have roof areas above 1000 square meters and are in the top 10% of roof potential?”
+- “Give the counts for each condition separately and for both together.”
+
+Top percentages use a percentile cutoff over valid buildings in the loaded scene
+before intersecting other filters. Ask “top 10% within that group” to calculate the
+percentile within the filtered population instead. Ties at the cutoff are included.
+Follow-ups retain resolved filters, and “of these” after a ranking refers to its
+returned buildings. A follow-up that would inherit an irradiance condition from a
+different selected time asks for a new full query rather than mixing times.
+
+Each answer records its selected time and saves its matching building IDs for
+**Show results on map**, so moving the slider does not change an earlier selection.
+The tools read saved solar calculations only; they never start preparation. If
+annual or selected-day results are missing, use the map's existing preparation
+controls. Original area and reference-exposure queries still work without them.
+
+The collapsed **About this local assistant** block describes the demo computer,
+Bionic, the configured model, query semantics, and limitations.
 Facade measurements are not available yet. Add future facade joins and tools in
 `solar_queries.py`; the assistant and map consume generic building records keyed
 by `building_id`, so they need no facade-specific conversation logic.
