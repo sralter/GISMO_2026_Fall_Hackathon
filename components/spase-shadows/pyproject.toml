@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=77.0.3", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spase-shadows"
+version = "0.0.1"
+description = "Live building shadow renderer for SPASE"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "SPASE team", email = "s.r.alter@icloud.com" }]
+dependencies = ["streamlit >= 1.51"]
+
+[tool.setuptools.packages.find]
+include = ["spase_shadows*"]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+spase_shadows = ["frontend/build/**/*", "pyproject.toml"]
