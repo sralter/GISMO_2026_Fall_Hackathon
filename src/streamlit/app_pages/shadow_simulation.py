@@ -128,4 +128,4 @@ with right:
     st.caption('Flat roofs and level ground are approximations. Shadows from beyond the buffer may be missing near sunrise or sunset. No clouds or reflected-light model.')
 
 with left:
-    render_chat(scene.spec)
+    render_chat(scene.spec, source_path=str(SOURCE), day=day, steps=steps)
