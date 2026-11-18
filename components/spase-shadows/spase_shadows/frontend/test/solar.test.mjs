@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {roofColor, roofValues} from '../src/solar.ts';
+import {roofColor, roofColorKey, roofValues} from '../src/solar.ts';
 
 test('fixed roof ramp distinguishes missing data and zero irradiance', () => {
   assert.deepEqual(roofColor(null, 1200), [160, 160, 160]);
@@ -8,6 +8,13 @@ test('fixed roof ramp distinguishes missing data and zero irradiance', () => {
   assert.deepEqual(roofColor(600, 1200), [255, 128, 0]);
   assert.deepEqual(roofColor(1200, 1200), [255, 0, 0]);
   assert.deepEqual(roofColor(1500, 1200), [255, 0, 0]);
+});
+
+test('roof colors refresh when solar data arrives after the scene', () => {
+  // Same mode and ids: only the arrival of solar data distinguishes the two states.
+  assert.notEqual(roofColorKey('annual', 'a', 'a', false, '48'), roofColorKey('annual', 'a', 'a', true, '48'));
+  assert.equal(roofColorKey('annual', 'a', 'a', true, '48'), roofColorKey('annual', 'a', 'a', true, '50'));
+  assert.notEqual(roofColorKey('instant', 'a', 'a', true, '48'), roofColorKey('instant', 'a', 'a', true, '50'));
 });
 
 test('timestamp lookup cannot display another day’s cached values', () => {

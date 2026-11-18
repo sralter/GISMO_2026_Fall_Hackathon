@@ -118,12 +118,15 @@ class HorizonIndex:
     Columns extend below the lowest receiver: terrain outside footprints is not modeled.
     Horizon sampling is an approximation; refine azimuth spacing for narrow obstacles.
     """
-    def __init__(self, buildings: gpd.GeoDataFrame):
+    def __init__(self, buildings: gpd.GeoDataFrame, bottom: float | None = None):
+        """`bottom` (m) sets where wall columns start; pass a shared value when combining indexes."""
         import vtk
         from vtkmodules.util.numpy_support import numpy_to_vtk, numpy_to_vtkIdTypeArray
         self.vtk = vtk
         vertices, faces, tops = [], [], []
-        bottom = float(buildings.ground_ele.min() * FEET_TO_METERS - 1)
+        if bottom is None:
+            bottom = float(buildings.ground_ele.min() * FEET_TO_METERS - 1)
+        self.bottom = bottom
         self.extent = buildings.total_bounds
         for geometry, top in zip(buildings.geometry, buildings.roof_z):
             for polygon in _polygons(geometry):
@@ -156,14 +159,21 @@ class HorizonIndex:
         cell_id: Any = self.vtk.reference(0)
         hit, pcoords = [0., 0., 0.], [0., 0., 0.]
         result = np.zeros((len(origins), round(360 / azimuth_step_deg)), dtype=np.float32)
+        # Rays must reach the far side of the obstacles, also from origins outside the extent.
+        west, south, east, north = self.extent
+        corners = np.array([[west, south], [west, north], [east, south], [east, north]])
+        corner_distance = np.linalg.norm(np.asarray(origins).reshape(-1, 3)[:, None, :2] - corners[None], axis=2)
+        lengths = np.maximum(self.length, corner_distance.max(axis=1) + 1)
         for j, azimuth in enumerate(np.deg2rad(np.arange(result.shape[1]) * azimuth_step_deg)):
-            offset = np.array([math.sin(azimuth), math.cos(azimuth), 0.]) * self.length
+            direction = np.array([math.sin(azimuth), math.cos(azimuth), 0.])
             for i, origin in enumerate(origins):
+                length = float(lengths[i])
+                offset = direction * length
                 slope = 0.
                 # Raise the ray above each encountered roof until the sky is clear.
                 # Nearest-hit queries avoid enumerating every wall along a horizontal ray.
                 while True:
-                    offset[2] = self.length * slope
+                    offset[2] = length * slope
                     if not self.locator.IntersectWithLine(origin, origin + offset, 1e-7,
                                                          hit_t, hit, pcoords, sub_id, cell_id, cell):
                         break

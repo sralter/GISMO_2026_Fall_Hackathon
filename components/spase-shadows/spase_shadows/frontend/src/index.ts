@@ -1,22 +1,28 @@
 import type {FrontendRenderer, FrontendRendererArgs} from '@streamlit/component-v2-lib';
-import {type Layer, Deck, MapView, AmbientLight, DirectionalLight, LightingEffect, type MapViewState} from '@deck.gl/core';
+import {type Effect, type Layer, Deck, MapView, AmbientLight, DirectionalLight, LightingEffect, type MapViewState} from '@deck.gl/core';
 import {SolidPolygonLayer, PathLayer} from '@deck.gl/layers';
 import {JSONConverter} from '@deck.gl/json';
 import './style.css';
-import {roofColor, roofValues, type SolarData} from './solar';
+import {roofColor, roofColorKey, roofValues, type SolarData} from './solar';
 
 type Step = {timestamp: number; label: string; elevation: number; direction: [number, number, number]; noon: boolean};
 type Data = {scene: string; scene_id: string; steps: Step[]; slot: number;
   shadows: boolean; live: boolean; camera: MapViewState | null; camera_command: number; highlighted_building_ids?: string[]; solar?: string; solar_id?: string; color_mode?: string};
 type State = {slot: number; loaded_scene_id: string; loaded_solar_id: string};
 type Emit = FrontendRendererArgs<State, Data>['setStateValue'];
-type BuildingInfo = Record<string, {height_m: number; bin: string; roof_area_m2: number; roof_exposure: number | null}>;
+type BuildingInfo = Record<string, {height_m: number; bin: string; roof_area_m2: number}>;
 type Roof = {building_id: string; polygon: number[][][]; color: [number, number, number]};
 type Instance = {solar: SolarData | null; solarId: string; solarIndex: Map<string, number>; colorKey: string; layers: Layer[]; roofs: Roof[]; highlightKey: string; info: BuildingInfo; deck: Deck<MapView>; effect: LightingEffect; root: HTMLElement; slider: HTMLInputElement; label: HTMLOutputElement;
   status: HTMLElement; sceneId: string; cameraCommand: number; frame: number; cleanup: ReturnType<typeof setTimeout> | null;
   data: Data; emit: Emit; draws: number; renderMs: number; lastStart: number};
 const instances = new WeakMap<FrontendRendererArgs['parentElement'], Instance>();
 const converter = new JSONConverter({configuration: {classes: {SolidPolygonLayer, PathLayer, MapView}}});
+
+/** deck.gl 9.4 skips LightingEffect when picking, leaving the shadow module without a texture, so picked layers never draw. */
+function pickingShadowShim(lighting: LightingEffect): Effect {
+  return {id: 'picking-shadow-shim', props: {}, useInPicking: true, setup() {}, preRender() {}, cleanup() {},
+    getShaderModuleProps: () => ({shadow: {dummyShadowMap: (lighting as unknown as {dummyShadowMap: unknown}).dummyShadowMap}})};
+}
 
 function illuminate(instance: Instance) {
   const step = instance.data.steps[Number(instance.slider.value)];
@@ -47,15 +53,14 @@ function currentValues(instance: Instance, buildingId: string) {
 
 function updateRoofColors(instance: Instance) {
   if (!instance.layers.length) return;
-  const mode = instance.data.color_mode ?? 'reference';
-  const key = `${mode}:${instance.solarId}:${instance.data.solar_id}:${mode === 'instant' ? instance.slider.value : ''}`;
+  const mode = instance.data.color_mode ?? 'annual';
+  const key = roofColorKey(mode, instance.solarId, instance.data.solar_id, instance.solar !== null, instance.slider.value);
   if (instance.colorKey === key) return;
   instance.colorKey = key;
   instance.layers = instance.layers.map(layer => layer.id === 'roofs'
     ? (layer as SolidPolygonLayer<Roof>).clone({
-      getFillColor: (roof: Roof) => mode === 'reference' ? roof.color
-        : roofColor(mode === 'annual' ? currentValues(instance, roof.building_id).annual
-          : currentValues(instance, roof.building_id).instant, mode === 'annual' ? 2200 : 1200),
+      getFillColor: (roof: Roof) => roofColor(mode === 'annual' ? currentValues(instance, roof.building_id).annual
+        : currentValues(instance, roof.building_id).instant, mode === 'annual' ? 2200 : 1200),
       updateTriggers: {getFillColor: key},
     }) : layer);
   instance.highlightKey = '';
@@ -97,12 +102,11 @@ const render: FrontendRenderer<State, Data> = ({parentElement, data, setStateVal
     try {
       next.deck = new Deck({parent: canvas, views: new MapView({repeat: false}), controller: true,
         initialViewState: data.camera ?? {longitude: -73.9875, latitude: 40.6935, zoom: 14.3, pitch: 55, bearing: -20},
-        effects: [next.effect], width: '100%', height: '100%', useDevicePixels: Math.min(window.devicePixelRatio, 2),
+        effects: [next.effect, pickingShadowShim(next.effect)], width: '100%', height: '100%', useDevicePixels: Math.min(window.devicePixelRatio, 2),
         getTooltip: ({object, layer}) => {
           const info = next.info[object?.building_id];
           if (!info) return null;
           const values = currentValues(next, object.building_id);
-          const reference = info.roof_exposure === null ? 'No exposure data' : `June 21 exposure · ${info.roof_exposure.toFixed(2)} (units unspecified)`;
           const calculated = [
             values.annual === null ? 'Annual resource unavailable' : `Annual clear-sky · ${values.annual.toFixed(1)} kWh/m²/year`,
             values.instant === null ? 'Selected-time result unavailable' : `Clear-sky irradiance · ${values.instant.toFixed(1)} W/m²`,
@@ -110,7 +114,7 @@ const render: FrontendRenderer<State, Data> = ({parentElement, data, setStateVal
           ].filter(Boolean).join('\n');
           // Façade area will be implemented separately when wall measurements are available.
           const surface = (layer?.id === 'roofs' || layer?.id === 'chat-results')
-            ? `Roof area · ${info.roof_area_m2.toLocaleString(undefined, {maximumFractionDigits: 2})} m²\n${(next.data.color_mode ?? 'reference') === 'reference' ? reference : calculated}`
+            ? `Roof area · ${info.roof_area_m2.toLocaleString(undefined, {maximumFractionDigits: 2})} m²\n${calculated}`
             : 'Façade';
           return {text: `Building ${object.building_id}\n${surface}\nBIN ${info.bin}`};
         },

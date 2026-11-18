@@ -43,9 +43,7 @@ class SolarAppTests(unittest.TestCase):
                 at.button(key='shadow_winter').click().run()
                 self.assertFalse(at.exception)
                 self.assertTrue(at.button(key='shadow_prepare_day'))
-                at.segmented_control(key='shadow_color_mode').set_value('Colleague’s June 21 data').run()
-                self.assertFalse(at.exception)
-                self.assertFalse(any(b.key == 'shadow_prepare_day' for b in at.button))
+                self.assertEqual(at.segmented_control(key='shadow_color_mode').options, ['Annual clear-sky', 'Selected time'])
 
 
 if __name__ == '__main__':

@@ -146,8 +146,8 @@ def check_data(root=ROOT):
     features = {
         'Building shadows / calculated solar preparation': footprints,
         'Reference-exposure map': footprints and radiation,
-        'Height impact': radiation,
-        'Height impact with permit overlays': radiation and permits,
+        'Height impact': footprints,
+        'Height impact with permit overlays': footprints and permits,
         'Complete CityGML exploration (all 20 areas)': all(gml),
         'CityGML inspection notebook (all areas)': all(gml) and all(sides),
     }

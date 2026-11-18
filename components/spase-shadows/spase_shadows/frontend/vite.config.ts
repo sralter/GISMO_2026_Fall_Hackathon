@@ -23,18 +23,20 @@ export default defineConfig(() => {
         formats: ["es"],
         fileName: "index-[hash]",
       },
-      ...(!isDev && {
-        rolldownOptions: {
-          output: {
+      rolldownOptions: {
+        output: {
+          // One file: the component loads only index-*.js, and deck.gl 9.4 lazy-loads its WebGL adapter.
+          inlineDynamicImports: true,
+          ...(!isDev && {
             minify: {
               compress: {
                 dropConsole: true,
                 dropDebugger: true,
               },
             },
-          },
+          }),
         },
-      }),
+      },
     },
   } satisfies UserConfig;
 });

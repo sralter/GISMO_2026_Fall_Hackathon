@@ -13,6 +13,7 @@ from gismo_2026_fall_hackathon.roof_solar import (
     HorizonIndex, SolarConfig, annual_times, cache_directory, clean_buildings,
     day_times, evaluate, load_results, prepare, sample_roof, solar_weather,
 )
+from gismo_2026_fall_hackathon.shadows import STUDY_BOUNDS
 
 
 def buildings(geometries, heights=None, ground=None):
@@ -103,7 +104,10 @@ class RoofSolarTests(unittest.TestCase):
         self.assertTrue((actual[['dni', 'dhi']] >= 0).all().all())
 
     def test_cache_fingerprint_and_checkpoint_resume(self):
-        frame = buildings([box(584500, 4505000, 584510, 4505010)])
+        from shapely.geometry import Point
+        west, south, east, north = STUDY_BOUNDS
+        center = gpd.GeoSeries([Point((west + east) / 2, (south + north) / 2)], crs=4326).to_crs(32618).iloc[0]
+        frame = buildings([box(center.x, center.y, center.x + 10, center.y + 10)])
         frame['height_roo'] = 100.
         config = SolarConfig()
         with tempfile.TemporaryDirectory() as folder:

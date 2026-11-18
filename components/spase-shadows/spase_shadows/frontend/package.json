@@ -14,10 +14,18 @@
   },
   "prettier": {},
   "dependencies": {
-    "@deck.gl/core": "9.1.14",
-    "@deck.gl/json": "9.1.14",
-    "@deck.gl/layers": "9.1.14",
+    "@deck.gl/core": "9.4.1",
+    "@deck.gl/json": "9.4.1",
+    "@deck.gl/layers": "9.4.1",
     "@streamlit/component-v2-lib": "^0.2.0"
+  },
+  "overrides": {
+    "@luma.gl/constants": "9.4.2",
+    "@luma.gl/core": "9.4.2",
+    "@luma.gl/engine": "9.4.2",
+    "@luma.gl/gpgpu": "9.4.2",
+    "@luma.gl/shadertools": "9.4.2",
+    "@luma.gl/webgl": "9.4.2"
   },
   "devDependencies": {
     "cross-env": "^10.1.0",

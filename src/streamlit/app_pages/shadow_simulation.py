@@ -1,9 +1,9 @@
-"""Brooklyn shadow simulation and chatbot."""
+"""Study-area shadow simulation and chatbot."""
 from datetime import date
 import hashlib
 import streamlit as st
 from shadow_view import SOURCE, cached_scene, cached_steps, source_stamp, cached_solar, solar_stamp
-from gismo_2026_fall_hackathon.shadows import CAMERAS, STUDY_BOUNDS
+from gismo_2026_fall_hackathon.shadows import CAMERAS, STUDY_AREA_NAME, STUDY_BOUNDS
 from spase_shadows import render_shadows
 from gismo_2026_fall_hackathon.roof_solar import prepare, ANNUAL_SCALE, INSTANT_SCALE
 from solar_chat import render_chat, reset_chat, highlight_ids
@@ -23,8 +23,9 @@ with st.sidebar:
     st.caption('Presets use representative solstice dates: June 21 and December 21.')
     live = st.toggle('Live shadows', value=True, key='shadow_live', help='Turn off to update only when you release the time slider.')
     shadows = st.toggle('Show shadows', value=True, key='shadow_enabled')
-    area = st.selectbox('Area', ['Brooklyn study area', 'NYC area'], key='shadow_area')
-    if area == 'Brooklyn study area':
+    study_label = f'{STUDY_AREA_NAME} study area'
+    area = st.selectbox('Area', [study_label, 'NYC area'], key='shadow_area')
+    if area == study_label:
         bounds = STUDY_BOUNDS
     else:
         with st.form('shadow_area_form'):
@@ -57,17 +58,17 @@ with right:
     except (OSError, ValueError) as exc:
         st.error(f'Could not prepare buildings: {exc}')
         st.stop()
-    cameras = st.columns(3)
+    cameras = st.columns(len(CAMERAS))
     for column, name in zip(cameras, CAMERAS):
         if column.button(name, key=f'shadow_camera_{name}', width='stretch'):
             st.session_state.shadow_camera = scene.spec['initialViewState'] if name == 'Overview' else CAMERAS[name]
             st.session_state.shadow_camera_command += 1
     solar = cached_solar(str(SOURCE), day, solar_stamp(day))
-    modes = {'Annual clear-sky': 'annual', 'Selected time': 'instant', "Colleague’s June 21 data": 'reference'}
-    st.session_state.setdefault('shadow_color_mode', 'Annual clear-sky' if solar['annual'] else "Colleague’s June 21 data")
+    modes = {'Annual clear-sky': 'annual', 'Selected time': 'instant'}
+    st.session_state.setdefault('shadow_color_mode', 'Annual clear-sky')
     mode = modes[st.segmented_control('Roof color', list(modes), key='shadow_color_mode', required=True) or 'Annual clear-sky']
-    if mode != 'reference' and tuple(bounds) != STUDY_BOUNDS:
-        st.info('Calculated results currently cover the default Brooklyn scene. Roofs outside that calculation are gray.')
+    if tuple(bounds) != STUDY_BOUNDS:
+        st.info(f'Calculated results currently cover the default {STUDY_AREA_NAME} scene. Roofs outside that calculation are gray.')
     if mode == 'annual' and not solar['annual']:
         st.info('Annual results have not been prepared. Run the local preparation command; it resumes completed shading chunks.')
         st.code('uv run python -m gismo_2026_fall_hackathon.roof_solar --workers 4', language='bash')
@@ -103,28 +104,23 @@ with right:
 
     interactive_map()
     st.caption(f'{scene.buildings:,} buildings including the 1 km caster buffer · {scene.excluded:,} excluded · {scene.repaired:,} repaired')
-    exposure = scene.spec['roofExposure']
-    scale = ANNUAL_SCALE if mode == 'annual' else INSTANT_SCALE if mode == 'instant' else exposure['range']
-    label = '2026 annual clear-sky solar resource · kWh/m²/year' if mode == 'annual' else 'Selected-time clear-sky irradiance · W/m²' if mode == 'instant' else 'June 21 reference exposure · units unspecified'
-    if scale is not None:
-        low, high = scale
-        st.html(f'''<div role="img" aria-label="{label}: yellow is low, red is high; gray means unavailable">
-          <div>{label}</div>
-          <div style="height:12px;background:linear-gradient(to right,#ffff00,#ff8000,#ff0000)"></div>
-          <div style="display:flex;justify-content:space-between"><span>{low:,.2f} · Low</span><span>High · {high:,.2f}</span></div>
-          <div><span style="display:inline-block;width:12px;height:12px;background:#a0a0a0"></span> Gray: unavailable</div>
-        </div>''')
-    if mode == 'reference':
-        st.caption(f"{exposure['measured']:,} buildings have reference exposure data. These fixed values have unspecified units.")
-    else:
-        st.caption('Calculated from neighboring building geometry, independently of visual shadow toggles. '
-                   'Annual values integrate clear skies throughout 2026; selected-time values include direct and diffuse sunlight.')
-        st.caption('5 m roof sampling · 5° sampled skylines · hourly annual integration · '
-                   'additional 1 km of shading obstacles beyond the rendered scene. '
-                   'Flat roofs, isotropic diffuse sky, opaque building columns; trees, roof equipment, terrain between buildings, '
-                   'and reflected light are excluded. Analysis uses ground elevations; visual shadows use level ground. '
-                   'This is incoming solar energy, not electricity output.')
-    st.caption('Blue-gray: façades · teal outline: study area. Drag to pan; Shift + drag rotates; scroll to zoom.')
+    low, high = ANNUAL_SCALE if mode == 'annual' else INSTANT_SCALE
+    label = '2026 annual clear-sky solar resource · kWh/m²/year' if mode == 'annual' else 'Selected-time clear-sky irradiance · W/m²'
+    st.html(f'''<div role="img" aria-label="{label}: yellow is low, red is high; gray means unavailable">
+      <div>{label}</div>
+      <div style="height:12px;background:linear-gradient(to right,#ffff00,#ff8000,#ff0000)"></div>
+      <div style="display:flex;justify-content:space-between"><span>{low:,.2f} · Low</span><span>High · {high:,.2f}</span></div>
+      <div><span style="display:inline-block;width:12px;height:12px;background:#a0a0a0"></span> Gray: unavailable</div>
+    </div>''')
+    st.caption('Calculated from neighboring building geometry, independently of visual shadow toggles. '
+               'Annual values integrate clear skies throughout 2026; selected-time values include direct and diffuse sunlight.')
+    st.caption('5 m roof sampling · 5° sampled skylines · hourly annual integration · '
+               'additional 1 km of shading obstacles beyond the rendered scene. '
+               'Flat roofs, isotropic diffuse sky, opaque building columns; trees, roof equipment, terrain between buildings, '
+               'and reflected light are excluded. Analysis uses ground elevations; visual shadows use level ground. '
+               'This is incoming solar energy, not electricity output.')
+    st.caption(f"Blue outline: approved solar permit roofs ({scene.spec['permitRoofs']:,}) · blue-gray: façades · "
+               'teal outline: study area. Drag to pan; Shift + drag rotates; scroll to zoom.')
     st.caption('Flat roofs and level ground are approximations. Shadows from beyond the buffer may be missing near sunrise or sunset. No clouds or reflected-light model.')
 
 with left:

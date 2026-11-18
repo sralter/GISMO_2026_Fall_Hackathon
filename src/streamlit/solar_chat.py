@@ -2,11 +2,20 @@
 import os
 import math
 from datetime import date
+from pathlib import Path
 import streamlit as st
 from openai import OpenAI, OpenAIError
+from gismo_2026_fall_hackathon import solar_assistant, solar_queries
 from gismo_2026_fall_hackathon.solar_assistant import answer_question
 from gismo_2026_fall_hackathon.solar_queries import execute_tool, attach_solar_metrics
-from shadow_view import cached_solar_results, solar_stamp
+from shadow_view import _optional_stamp, cached_solar_results, solar_stamp
+
+SUGGESTIONS = ['How many buildings have roof areas above 500 square meters?',
+               'Which are the top 5 buildings with the highest solar potential?']
+# Answers depend only on roof geometry, not the selected time, so they can be reused across sessions.
+CACHED_SUGGESTIONS = frozenset(SUGGESTIONS[:1])
+# Editing the assistant's instructions or tools must not serve stale answers.
+ASSISTANT_STAMP = tuple(_optional_stamp(Path(module.__file__)) for module in (solar_assistant, solar_queries))
 
 
 def setting(name: str, default: str = '') -> str:
@@ -19,6 +28,13 @@ def setting(name: str, default: str = '') -> str:
 @st.cache_resource
 def get_client(base_url: str) -> OpenAI:
     return OpenAI(base_url=base_url, api_key='lm-studio', timeout=120.0, max_retries=0)
+
+
+@st.cache_data(max_entries=8, show_spinner=False, persist='disk')
+def cached_answer(question: str, model: str, scene_id: str, assistant_stamp: tuple, _client: OpenAI, _inventory: dict,
+                  _context: dict) -> tuple:
+    """First-turn answer, persisted to disk; underscore arguments are not part of the cache key."""
+    return answer_question(_client, model, question, [], _inventory, context=_context)
 
 
 def reset_chat(scene_id: str):
@@ -99,17 +115,19 @@ def render_chat(spec: dict, *, source_path: str | None = None, day: date | None 
     prompt = st.chat_input('Ask about roof area or solar exposure…', key='solar_prompt',
                            disabled=not model, submit_mode='disable', max_chars=4000)
     if not state['messages']:
-        suggestion = st.pills('Try asking', ['How many buildings have roof areas above 500 square meters?',
-                                           'Which are the top 5 buildings with the highest solar potential?'],
-                              key='solar_suggestion', disabled=not model)
+        suggestion = st.pills('Try asking', SUGGESTIONS, key='solar_suggestion', disabled=not model)
         prompt = prompt or suggestion
     if prompt:
         try:
             with st.spinner('Querying the building inventory…'):
                 inventory, context = query_snapshot(spec, source_path, day, steps)
-                answer, conversation, results = answer_question(
-                    get_client(setting('LOCAL_BASE_URL', 'http://localhost:1234/v1')),
-                    model, prompt, state['conversation'], inventory, context=context)
+                client = get_client(setting('LOCAL_BASE_URL', 'http://localhost:1234/v1'))
+                if prompt in CACHED_SUGGESTIONS and not state['conversation']:
+                    answer, conversation, results = cached_answer(prompt, model, state['scene_id'], ASSISTANT_STAMP,
+                                                                  client, inventory, context)
+                else:
+                    answer, conversation, results = answer_question(client, model, prompt, state['conversation'],
+                                                                    inventory, context=context)
                 for result in results:
                     snapshot = execute_tool(result['tool'], result['arguments'], inventory,
                                             include_count_records=True, context=result.get('context'),

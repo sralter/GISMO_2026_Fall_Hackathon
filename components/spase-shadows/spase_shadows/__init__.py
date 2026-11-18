@@ -19,7 +19,7 @@ _renderer = st.components.v2.component(
 def render_shadows(*, scene_payload: str, scene_id: str, steps: list[dict], slot: int,
                    shadows: bool, live: bool, camera: dict | None, camera_command: int,
                    key: str = 'shadow_map', highlighted_building_ids: list[str] | None = None,
-                   solar_payload: str = '', solar_id: str = '', color_mode: str = 'reference'):
+                   solar_payload: str = '', solar_id: str = '', color_mode: str = 'annual'):
     """Mount the map; acknowledge geometry and solar arrays separately to avoid resends.
 
     Time synchronizes to Python only after a slider release.

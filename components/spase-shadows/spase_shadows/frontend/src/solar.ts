@@ -8,6 +8,12 @@ export function roofColor(value: number | null, maximum: number): [number, numbe
     : [255, Math.round(256 * (1 - fraction)), 0];
 }
 
+/** deck.gl recolors roofs only when this key changes, so it must change once solar data arrives. */
+export function roofColorKey(mode: string, solarId: string, requestedId: string | undefined,
+                             solarReady: boolean, slot: string): string {
+  return `${mode}:${solarId}:${requestedId ?? ''}:${solarReady ? 'ready' : 'pending'}:${mode === 'instant' ? slot : ''}`;
+}
+
 export function roofValues(solar: SolarData | null, index: number | undefined, slot: number, timestamp: number) {
   if (!solar || index === undefined) return {annual: null, instant: null, sunlit: null};
   const ready = solar.valid[index] && solar.timestamps[slot] === timestamp;

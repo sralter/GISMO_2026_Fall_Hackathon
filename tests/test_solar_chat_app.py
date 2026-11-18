@@ -66,3 +66,25 @@ class SolarChatAppTests(unittest.TestCase):
                 at.button(key='solar_reset').click().run()
                 self.assertFalse(at.exception)
                 self.assertEqual(at.session_state.solar_chat['messages'], [])
+
+    def test_roof_area_suggestion_answer_is_cached(self):
+        question = 'How many buildings have roof areas above 500 square meters?'
+        self.addCleanup(solar_chat.cached_answer.clear)
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / 'footprints.parquet'
+            sample().to_parquet(source, write_covering_bbox=True)
+
+            def answer(client, model, question, conversation, inventory, *, context):
+                result = execute_tool('count_buildings', {'roof_area_above_m2': 500}, inventory, context=context)
+                return 'Matching roofs.', [], [result]
+
+            with patch.object(shadow_view, 'SOURCE', source), patch.object(solar_chat, 'setting', return_value='test-local-model'), \
+                 patch.object(solar_chat, 'get_client'), patch.object(solar_chat, 'answer_question', side_effect=answer) as model:
+                at = AppTest.from_file(str(ROOT / 'src/streamlit/Home.py'), default_timeout=30).run()
+                at.switch_page('app_pages/shadow_simulation.py').run()
+                for _ in range(2):
+                    at.pills(key='solar_suggestion').set_value(question).run()
+                    self.assertFalse(at.exception)
+                    self.assertEqual(at.session_state.solar_chat['messages'][-1]['content'], 'Matching roofs.')
+                    at.button(key='solar_reset').click().run()
+                self.assertEqual(model.call_count, 1)

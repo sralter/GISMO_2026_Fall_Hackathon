@@ -54,7 +54,7 @@ The date and time use `America/New_York`; repeated daylight-saving hours include
 their timezone and UTC offset.
 
 The **Roof color** control offers annual clear-sky solar resource (kWh/m²/year),
-selected-time clear-sky irradiance (W/m²), and the colleague’s June 21 reference.
+selected-time clear-sky irradiance (W/m²), and the June 21 reference data.
 Each uses a yellow–orange–red ramp; gray means unavailable. Façades remain blue-gray. Reference exposure comes from `MEAN_1` in
 `18_NYC_Solar_Candidates_With_Radiation.parquet`, joined to footprints by `doitt_id`.
 Its 246 populated values match `MEAN` in `07_Brooklyn_Rooftop_Solar_Table.parquet`

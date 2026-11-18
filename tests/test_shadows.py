@@ -16,13 +16,23 @@ from gismo_2026_fall_hackathon.shadows import (
 )
 
 
+# Fixture coordinates are drawn around (-73.987, 40.6905) and shifted to the current study area.
+SHIFT = ((STUDY_BOUNDS[0] + STUDY_BOUNDS[2]) / 2 + 73.987, (STUDY_BOUNDS[1] + STUDY_BOUNDS[3]) / 2 - 40.6905)
+
+
+def shifted(bounds):
+    return (bounds[0] + SHIFT[0], bounds[1] + SHIFT[1], bounds[2] + SHIFT[0], bounds[3] + SHIFT[1])
+
+
 def sample():
     courtyard = Polygon([(-73.99, 40.69), (-73.989, 40.69), (-73.989, 40.691), (-73.99, 40.691)],
                         holes=[[(-73.9898, 40.6902), (-73.9892, 40.6902), (-73.9892, 40.6908), (-73.9898, 40.6908)]])
-    return gpd.GeoDataFrame({'height_roo': [100., 0., None], 'doitt_id': [1, 2, 3], 'bin': [3000001, 3000002, 3000003],
+    frame = gpd.GeoDataFrame({'height_roo': [100., 0., None], 'doitt_id': [1, 2, 3], 'bin': [3000001, 3000002, 3000003],
         'base_bbl': ['a', 'b', 'c'], 'feature_co': [2100, 2100, 2100], 'ground_ele': [0., 0., 0.]},
         geometry=[MultiPolygon([courtyard, box(-73.988, 40.69, -73.9879, 40.6901)]),
                   box(-73.986, 40.69, -73.985, 40.691), box(-73.984, 40.69, -73.983, 40.691)], crs=4326)
+    frame.geometry = frame.geometry.translate(*SHIFT)
+    return frame
 
 
 class ShadowTests(unittest.TestCase):
@@ -73,7 +83,7 @@ class ShadowTests(unittest.TestCase):
                 actual = next(l for l in scene.spec['layers'] if l['id'] == layer_id)
                 original = next(l for l in baseline.spec['layers'] if l['id'] == layer_id)
                 self.assertEqual(len(actual['data']), len(original['data']))
-            smaller = load_scene(path, bounds=(-73.9901, 40.6899, -73.989, 40.6911), buffer_m=0,
+            smaller = load_scene(path, bounds=shifted((-73.9901, 40.6899, -73.989, 40.6911)), buffer_m=0,
                                  radiation_path=radiation)
             roof_colors = lambda s: {r['building_id']: r['color'] for l in s.spec['layers'] if l['id'] == 'roofs' for r in l['data']}
             self.assertEqual(roof_colors(scene)['1'], roof_colors(smaller)['1'])
@@ -92,6 +102,23 @@ class ShadowTests(unittest.TestCase):
         self.assertTrue(layers['walls']['shadowEnabled'])
         self.assertFalse(layers['walls']['extruded'])
         self.assertEqual(scene.spec['buildingInfo']['1']['bin'], '3000001')
+
+    def test_permit_roofs_are_outlined_without_changing_building_records(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path, permits = Path(folder) / 'buildings.parquet', Path(folder) / 'permits.parquet'
+            sample().to_parquet(path, write_covering_bbox=True)
+            pd.DataFrame({'Bin': [3000001., None, 9999999.]}).to_parquet(permits)
+            scene = load_scene(path, permit_path=permits)
+            layer = next(l for l in scene.spec['layers'] if l['id'] == 'permit-roofs')
+            self.assertEqual(len(layer['data']), 2)  # Building 1 has two roof polygons.
+            self.assertTrue(all(point[2] == 30.68 for outline in layer['data'] for point in outline['path']))
+            self.assertEqual(scene.spec['permitRoofs'], 1)
+            # Meters would turn a thin outline into a band that hides the roof color.
+            for layer_id in ['permit-roofs', 'study-boundary']:
+                self.assertEqual(next(l for l in scene.spec['layers'] if l['id'] == layer_id)['widthUnits'], 'pixels')
+            self.assertEqual(scene.spec['buildingInfo'], load_scene(path).spec['buildingInfo'])
+            missing = load_scene(path, permit_path=Path(folder) / 'missing.parquet')
+            self.assertEqual(next(l for l in missing.spec['layers'] if l['id'] == 'permit-roofs')['data'], [])
 
     def test_bbox_read_and_building_limit(self):
         with tempfile.TemporaryDirectory() as folder:
